@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { CodeEditor } from '@/components/assessment/CodeEditor';
 import { BrowserMock } from '@/components/assessment/BrowserMock';
+import { useRef } from 'react';
 import { QuizComponent } from '@/components/assessment/QuizComponent';
+import { CalibrationOverlay } from '@/components/assessment/CalibrationOverlay';
 import { useProctoring } from '@/hooks/useProctoring';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -27,10 +29,16 @@ export default function AssessmentPage() {
     const [quizSubmitted, setQuizSubmitted] = useState(false);
     const [codeSubmitted, setCodeSubmitted] = useState(false);
     const [activeTab, setActiveTab] = useState('problem');
+    const [isCalibrated, setIsCalibrated] = useState(false);
+    const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
+    const gazeRef = useRef({ x: 0, y: 0 });
 
-    const { isTracking, warning } = useProctoring({
+    const { isTracking, warning, calibratePoint } = useProctoring({
         sessionId,
         enabled: true,
+        onGazeUpdate: (x, y) => {
+            gazeRef.current = { x, y };
+        }
     });
 
     // Fetch session data
@@ -47,6 +55,13 @@ export default function AssessmentPage() {
             if (response.data.mcqResponses?.length > 0) {
                 const hasAnswers = response.data.mcqResponses.some((r: any) => r.selectedAnswer !== null);
                 setQuizSubmitted(hasAnswers);
+
+                // Initialize local answers
+                const existing = response.data.mcqResponses.reduce((acc: any, r: any) => {
+                    if (r.selectedAnswer !== null) acc[r.question.id] = r.selectedAnswer;
+                    return acc;
+                }, {});
+                setQuizAnswers(prev => ({ ...prev, ...existing }));
             }
 
             // Check if code already submitted
@@ -74,13 +89,38 @@ export default function AssessmentPage() {
         }
     };
 
-    // Timer
+    // Timer Logic
     useEffect(() => {
+        if (!session || !session.startTime) return;
+
+        const calculateTimeLeft = () => {
+            const startTime = new Date(session.startTime).getTime();
+            const durationMs = (session.durationMinutes || 60) * 60 * 1000;
+            const endTime = startTime + durationMs;
+            const now = Date.now();
+            const diff = Math.floor((endTime - now) / 1000);
+            return Math.max(0, diff);
+        };
+
+        // Initialize timer
+        setTimeRemaining(calculateTimeLeft());
+
+        // Don't start countdown until calibration passed
+        if (!isCalibrated) return;
+
         const interval = setInterval(() => {
-            setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+            const left = calculateTimeLeft();
+            setTimeRemaining(left);
+
+            // Auto-submit if time runs out
+            if (left <= 0 && !submitting) {
+                handleFinishTest();
+                clearInterval(interval);
+            }
         }, 1000);
+
         return () => clearInterval(interval);
-    }, []);
+    }, [session, isCalibrated, submitting]);
 
     // Hide webgazer UI
     useEffect(() => {
@@ -224,6 +264,15 @@ export default function AssessmentPage() {
 
     return (
         <div className="h-screen w-screen bg-slate-900 flex flex-col overflow-hidden">
+            {/* Calibration Overlay - blocks everything until passed */}
+            {!isCalibrated && (
+                <CalibrationOverlay
+                    onComplete={() => setIsCalibrated(true)}
+                    calibratePoint={calibratePoint}
+                    gazeRef={gazeRef}
+                />
+            )}
+
             {/* Header */}
             <div className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -369,12 +418,10 @@ Output: [0,1]`}
                                         questions={session.mcqResponses.map((r: any) => r.question)}
                                         onSubmit={handleQuizSubmit}
                                         readonly={quizSubmitted}
-                                        existingAnswers={session.mcqResponses.reduce((acc: any, r: any) => {
-                                            if (r.selectedAnswer !== null) {
-                                                acc[r.question.id] = r.selectedAnswer;
-                                            }
-                                            return acc;
-                                        }, {})}
+                                        answers={quizAnswers}
+                                        onAnswerSelect={(qId, aIdx) => {
+                                            setQuizAnswers(prev => ({ ...prev, [qId]: aIdx }));
+                                        }}
                                     />
                                 </CardContent>
                             </Card>

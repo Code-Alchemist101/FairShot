@@ -125,8 +125,8 @@ export default function JobApplicantsPage({ params }: { params: { jobId: string 
                                             <TableCell>{new Date(app.appliedAt).toLocaleDateString()}</TableCell>
                                             <TableCell>
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${app.status === 'SHORTLISTED' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                        app.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                            'bg-slate-100 text-slate-700 border-slate-200'
+                                                    app.status === 'REJECTED' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        'bg-slate-100 text-slate-700 border-slate-200'
                                                     }`}>
                                                     {app.status.replace(/_/g, ' ')}
                                                 </span>
@@ -159,7 +159,7 @@ export default function JobApplicantsPage({ params }: { params: { jobId: string 
                                                         <FileText className="w-4 h-4 mr-1" /> Report
                                                     </Button>
                                                 )}
-                                                {app.status !== 'SHORTLISTED' && app.status !== 'REJECTED' && (
+                                                {!['APPLIED', 'ASSESSMENT_PENDING', 'ASSESSMENT_IN_PROGRESS', 'SHORTLISTED', 'REJECTED', 'HIRED'].includes(app.status) && (
                                                     <>
                                                         <Button
                                                             variant="default"

@@ -178,4 +178,18 @@ export class PaymentsService {
             );
         });
     }
+    async getHistory(userId: string) {
+        const company = await this.prisma.company.findUnique({
+            where: { userId },
+        });
+
+        if (!company) {
+            throw new BadRequestException('Company not found');
+        }
+
+        return this.prisma.payment.findMany({
+            where: { companyId: company.id },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
 }

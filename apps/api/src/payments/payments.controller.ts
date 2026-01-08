@@ -47,4 +47,12 @@ export class PaymentsController {
     ) {
         return this.paymentsService.verifySession(userId, sessionId);
     }
+    @Get('history')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.COMPANY)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get payment transaction history' })
+    async getHistory(@GetUser('userId') userId: string) {
+        return this.paymentsService.getHistory(userId);
+    }
 }

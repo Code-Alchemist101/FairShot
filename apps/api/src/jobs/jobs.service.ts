@@ -3,9 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateJobDto, UpdateJobDto } from './dto/job.dto';
 import { JobStatus, CompanyVerificationStatus } from '@prisma/client';
 
+
 @Injectable()
 export class JobsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService
+    ) { }
 
     async create(userId: string, createJobDto: CreateJobDto) {
         // Get company profile
@@ -24,7 +27,7 @@ export class JobsService {
         }
 
         // Create job
-        return this.prisma.job.create({
+        const job = await this.prisma.job.create({
             data: {
                 companyId: user.company.id,
                 title: createJobDto.title,
@@ -35,8 +38,8 @@ export class JobsService {
                 salaryMax: createJobDto.salaryMax,
                 requiredSkills: createJobDto.requiredSkills,
                 assessmentConfig: createJobDto.assessmentConfig,
-                status: JobStatus.ACTIVE,
-                publishedAt: new Date(),
+                status: createJobDto.status || JobStatus.ACTIVE,
+                publishedAt: createJobDto.status === JobStatus.DRAFT ? null : new Date(),
             },
             include: {
                 company: {
@@ -50,6 +53,8 @@ export class JobsService {
                 },
             },
         });
+
+        return job;
     }
 
     async findAll(filters?: { location?: string; jobType?: string; companyId?: string }) {

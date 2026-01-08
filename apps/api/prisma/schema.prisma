@@ -128,8 +128,13 @@ model Job {
   // Required skills (JSON array)
   requiredSkills Json @default("[]")
 
+  // Rich Job Details
+  tags           Json @default("[]") // ["Remote", "Urgent", "High Pay"]
+  qualifications Json @default("[]") // ["BS in CS", "3+ years exp"]
+  aboutCompany   String? @db.Text
+
   // Assessment Configuration
-  assessmentConfig Json @default("{}") // { modules: ["MCQ", "CODING"], timeLimit: 60, allowedTools: ["MDN", "W3Schools"] }
+  assessmentConfig Json @default("{}") // { modules: ["MCQ", "CODING"], mcqCount: 10, codingCount: 2 }
 
   status      JobStatus @default(DRAFT)
   publishedAt DateTime?
@@ -141,6 +146,8 @@ model Job {
   // Relationships
   applications  Application[]
   resourcePacks ResourcePack[]
+  mcqQuestions    MCQQuestion[]
+  codingProblems  CodingProblem[]
 
   @@index([companyId])
   @@index([status])
@@ -283,6 +290,11 @@ model CodingProblem {
   memoryLimitMB Int @default(256)
 
   createdAt DateTime @default(now())
+  
+  // AI Generation
+  isAiGenerated Boolean @default(false)
+  jobId         String?
+  job           Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   // Relationships
   submissions CodeSubmission[]
@@ -467,6 +479,11 @@ model MCQQuestion {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // AI Generation
+  isAiGenerated Boolean @default(false)
+  jobId         String?
+  job           Job?    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   // Relationships
   responses MCQResponse[]

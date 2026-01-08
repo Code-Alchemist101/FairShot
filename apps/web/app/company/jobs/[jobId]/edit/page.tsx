@@ -1,21 +1,23 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
-import { Loader2, ArrowLeft, Plus, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, ArrowLeft, Plus, X, Save } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
-export default function PostJobPage() {
+export default function EditJobPage() {
     const router = useRouter();
+    const params = useParams();
     const { toast } = useToast();
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     // Array states
     const [skills, setSkills] = useState<string[]>([]);
@@ -39,6 +41,68 @@ export default function PostJobPage() {
         modules: ['CODING'] as string[],
     });
 
+    useEffect(() => {
+        fetchJobDetails();
+    }, [params.jobId]);
+
+    const fetchJobDetails = async () => {
+        try {
+            const response = await api.get(`/jobs/${params.jobId}`);
+            const job = response.data;
+
+            setFormData({
+                title: job.title,
+                description: job.description,
+                location: job.location,
+                jobType: job.jobType,
+                salaryMin: job.salaryMin?.toString() || '',
+                salaryMax: job.salaryMax?.toString() || '',
+                aboutCompany: job.aboutCompany || '',
+                timeLimit: job.assessmentConfig?.timeLimit?.toString() || '60',
+                mcqCount: job.assessmentConfig?.mcqCount?.toString() || '5',
+                codingCount: job.assessmentConfig?.codingCount?.toString() || '1',
+                modules: job.assessmentConfig?.modules || ['CODING'],
+            });
+
+            // Handle skills
+            if (Array.isArray(job.requiredSkills)) {
+                setSkills(job.requiredSkills);
+            } else if (typeof job.requiredSkills === 'string') {
+                try {
+                    setSkills(JSON.parse(job.requiredSkills));
+                } catch { setSkills([]); }
+            }
+
+            // Handle tags
+            if (Array.isArray(job.tags)) {
+                setTags(job.tags);
+            } else if (typeof job.tags === 'string') {
+                try {
+                    setTags(JSON.parse(job.tags));
+                } catch { setTags([]); }
+            }
+
+            // Handle qualifications
+            if (Array.isArray(job.qualifications)) {
+                setQualifications(job.qualifications);
+            } else if (typeof job.qualifications === 'string') {
+                try {
+                    setQualifications(JSON.parse(job.qualifications));
+                } catch { setQualifications([]); }
+            }
+
+            setLoading(false);
+        } catch (error) {
+            console.error('Failed to fetch job:', error);
+            toast({
+                title: 'Error',
+                description: 'Failed to load job details',
+                variant: 'destructive',
+            });
+            setLoading(false);
+        }
+    };
+
     // Helper for array inputs
     const handleAddItem = (
         item: string,
@@ -56,49 +120,54 @@ export default function PostJobPage() {
         setItems(items.filter(i => i !== itemToRemove));
     };
 
-    const handleSubmit = async (e: React.FormEvent, status: 'ACTIVE' | 'DRAFT' = 'ACTIVE') => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
+        setSaving(true);
 
         try {
-            await api.post('/jobs', {
+            await api.put(`/jobs/${params.jobId}`, {
                 title: formData.title,
                 description: formData.description,
                 location: formData.location,
                 jobType: formData.jobType,
-                salaryMin: parseInt(formData.salaryMin),
-                salaryMax: parseInt(formData.salaryMax),
+                salaryMin: parseInt(formData.salaryMin) || 0,
+                salaryMax: parseInt(formData.salaryMax) || 0,
                 aboutCompany: formData.aboutCompany,
                 requiredSkills: skills,
                 tags,
                 qualifications,
-                status,
                 assessmentConfig: {
-                    timeLimit: parseInt(formData.timeLimit),
-                    mcqCount: parseInt(formData.mcqCount),
-                    codingCount: parseInt(formData.codingCount),
+                    timeLimit: parseInt(formData.timeLimit) || 60,
+                    mcqCount: parseInt(formData.mcqCount) || 5,
+                    codingCount: parseInt(formData.codingCount) || 1,
                     modules: formData.modules,
                 },
             });
 
             toast({
-                title: status === 'ACTIVE' ? 'Job Posted Successfully!' : 'Draft Saved!',
-                description: status === 'ACTIVE'
-                    ? 'Candidates can now apply to this position.'
-                    : 'You can edit and publish this job later.',
+                title: 'Job Updated!',
+                description: 'Your changes have been saved successfully.',
             });
 
             router.push('/dashboard');
         } catch (error: any) {
             toast({
-                title: 'Failed to save job',
+                title: 'Failed to update job',
                 description: error.response?.data?.message || 'Something went wrong',
                 variant: 'destructive',
             });
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-900 py-8 px-4">
@@ -108,11 +177,11 @@ export default function PostJobPage() {
                 </Button>
 
                 <div className="space-y-2">
-                    <h1 className="text-3xl font-bold">Post a New Job</h1>
-                    <p className="text-muted-foreground">Create a job listing and configure the assessment.</p>
+                    <h1 className="text-3xl font-bold">Edit Job Posting</h1>
+                    <p className="text-muted-foreground">Update job details and assessment configuration.</p>
                 </div>
 
-                <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
+                <form onSubmit={handleSubmit} className="space-y-8">
                     <Card>
                         <CardHeader>
                             <CardTitle>Job Details</CardTitle>
@@ -126,7 +195,6 @@ export default function PostJobPage() {
                                     required
                                     value={formData.title}
                                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    placeholder="e.g. Senior Frontend Engineer"
                                 />
                             </div>
 
@@ -137,7 +205,6 @@ export default function PostJobPage() {
                                     required
                                     value={formData.description}
                                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Describe the role, responsibilities, and requirements..."
                                     className="min-h-[150px]"
                                 />
                             </div>
@@ -147,8 +214,7 @@ export default function PostJobPage() {
                                 <Textarea
                                     id="aboutCompany"
                                     value={formData.aboutCompany}
-                                    onChange={(e) => setFormData({ ...formData, aboutCompany: e.target.value })}
-                                    placeholder="Tell candidates about your company culture, mission, etc."
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, aboutCompany: e.target.value })}
                                     className="min-h-[100px]"
                                 />
                             </div>
@@ -161,7 +227,6 @@ export default function PostJobPage() {
                                         required
                                         value={formData.location}
                                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                        placeholder="e.g. Remote, New York"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -182,25 +247,23 @@ export default function PostJobPage() {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="salaryMin">Min Salary (Annual)</Label>
+                                    <Label htmlFor="salaryMin">Min Salary</Label>
                                     <Input
                                         id="salaryMin"
                                         type="number"
                                         required
                                         value={formData.salaryMin}
                                         onChange={(e) => setFormData({ ...formData, salaryMin: e.target.value })}
-                                        placeholder="e.g. 100000"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="salaryMax">Max Salary (Annual)</Label>
+                                    <Label htmlFor="salaryMax">Max Salary</Label>
                                     <Input
                                         id="salaryMax"
                                         type="number"
                                         required
                                         value={formData.salaryMax}
                                         onChange={(e) => setFormData({ ...formData, salaryMax: e.target.value })}
-                                        placeholder="e.g. 150000"
                                     />
                                 </div>
                             </div>
@@ -213,7 +276,7 @@ export default function PostJobPage() {
                                         value={currentSkill}
                                         onChange={(e) => setCurrentSkill(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddItem(currentSkill, skills, setSkills, setCurrentSkill))}
-                                        placeholder="Add a skill (e.g. React, Node.js)"
+                                        placeholder="Add a skill"
                                     />
                                     <Button type="button" onClick={() => handleAddItem(currentSkill, skills, setSkills, setCurrentSkill)} variant="secondary">
                                         <Plus className="w-4 h-4" />
@@ -233,7 +296,7 @@ export default function PostJobPage() {
 
                             {/* Tags */}
                             <div className="space-y-2">
-                                <Label>Tags (e.g. Remote, Urgent)</Label>
+                                <Label>Tags</Label>
                                 <div className="flex gap-2">
                                     <Input
                                         value={currentTag}
@@ -265,7 +328,7 @@ export default function PostJobPage() {
                                         value={currentQualification}
                                         onChange={(e) => setCurrentQualification(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddItem(currentQualification, qualifications, setQualifications, setCurrentQualification))}
-                                        placeholder="Add a qualification (e.g. BS in CS)"
+                                        placeholder="Add a qualification"
                                     />
                                     <Button type="button" onClick={() => handleAddItem(currentQualification, qualifications, setQualifications, setCurrentQualification)} variant="secondary">
                                         <Plus className="w-4 h-4" />
@@ -282,13 +345,13 @@ export default function PostJobPage() {
                                     ))}
                                 </div>
                             </div>
+
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
                             <CardTitle>Assessment Configuration</CardTitle>
-                            <CardDescription>Configure the automated test for this role.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -303,7 +366,7 @@ export default function PostJobPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="mcqCount">MCQ Count (Default: 5)</Label>
+                                    <Label htmlFor="mcqCount">MCQ Count</Label>
                                     <Input
                                         id="mcqCount"
                                         type="number"
@@ -314,7 +377,7 @@ export default function PostJobPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="codingCount">Coding Problems (Default: 1)</Label>
+                                    <Label htmlFor="codingCount">Coding Problems</Label>
                                     <Input
                                         id="codingCount"
                                         type="number"
@@ -341,7 +404,7 @@ export default function PostJobPage() {
                                                 }
                                             }}
                                         />
-                                        <Label htmlFor="coding">Coding Challenges</Label>
+                                        <Label htmlFor="coding">Coding</Label>
                                     </div>
                                     <div className="flex items-center space-x-2">
                                         <Checkbox
@@ -355,22 +418,19 @@ export default function PostJobPage() {
                                                 }
                                             }}
                                         />
-                                        <Label htmlFor="mcq">Multiple Choice Questions</Label>
+                                        <Label htmlFor="mcq">MCQ</Label>
                                     </div>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
 
-
                     <div className="flex justify-end gap-4">
-                        <Button type="button" variant="ghost" onClick={() => router.back()}>Cancel</Button>
-                        <Button type="button" variant="outline" onClick={(e) => handleSubmit(e, 'DRAFT')} disabled={loading}>
-                            Save as Draft
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                            {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                            Post Job
+                        <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
+                        <Button type="submit" disabled={saving}>
+                            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
                         </Button>
                     </div>
                 </form>

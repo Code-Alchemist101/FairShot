@@ -1,11 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { BalanceCard } from '@/components/billing/BalanceCard';
 import { PricingCard } from '@/components/billing/PricingCard';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { api } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 
 const PRICING_PACKAGES = [
     {
@@ -38,14 +49,26 @@ const PRICING_PACKAGES = [
 ];
 
 export default function BillingPage() {
+    const [transactions, setTransactions] = useState([]);
     const [company, setCompany] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
     const { toast } = useToast();
+    const router = useRouter();
 
     useEffect(() => {
         fetchCompanyData();
+        fetchTransactions();
     }, []);
+
+    const fetchTransactions = async () => {
+        try {
+            const response = await api.get('/payments/history');
+            setTransactions(response.data);
+        } catch (error) {
+            console.error('Failed to fetch transactions', error);
+        }
+    };
 
     const fetchCompanyData = async () => {
         try {
@@ -89,7 +112,15 @@ export default function BillingPage() {
     }
 
     return (
-        <div className="space-y-8 p-8">
+        <div className="space-y-8 p-8 max-w-7xl mx-auto">
+            <Button
+                variant="ghost"
+                onClick={() => router.push('/dashboard')}
+                className="text-slate-400 hover:text-white pl-0"
+            >
+                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+            </Button>
+
             {/* Header */}
             <div>
                 <h1 className="text-4xl font-bold text-white mb-2">Billing & Credits</h1>
@@ -127,12 +158,52 @@ export default function BillingPage() {
                 </div>
             </div>
 
-            {/* Transaction History Placeholder */}
-            <div className="mt-12 p-8 rounded-2xl border border-slate-700 bg-slate-800/30">
-                <h3 className="text-xl font-semibold text-white mb-2">Transaction History</h3>
-                <p className="text-slate-400 text-sm">
-                    Your payment history will appear here. Coming soon!
-                </p>
+            {/* Transaction History */}
+            <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-white">Transaction History</h2>
+                <div className="rounded-md border border-slate-700 bg-slate-800/30 overflow-hidden">
+                    <Table>
+                        <TableHeader className="bg-slate-800/50">
+                            <TableRow className="border-slate-700 hover:bg-transparent">
+                                <TableHead className="text-slate-300">Date</TableHead>
+                                <TableHead className="text-slate-300">Description</TableHead>
+                                <TableHead className="text-slate-300">Amount</TableHead>
+                                <TableHead className="text-slate-300">Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {transactions.length === 0 ? (
+                                <TableRow className="border-slate-700 hover:bg-transparent">
+                                    <TableCell colSpan={4} className="text-center py-8 text-slate-500">
+                                        No purchase history found.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                transactions.map((tx: any) => (
+                                    <TableRow key={tx.id} className="border-slate-700 hover:bg-slate-800/50">
+                                        <TableCell className="text-slate-300">
+                                            {new Date(tx.createdAt).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell className="text-slate-300 font-medium">
+                                            {tx.description}
+                                        </TableCell>
+                                        <TableCell className="text-slate-300">
+                                            {tx.currency} {tx.amount.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant={tx.status === 'COMPLETED' ? 'default' : 'secondary'}
+                                                className={tx.status === 'COMPLETED' ? 'bg-green-600 hover:bg-green-700' : ''}
+                                            >
+                                                {tx.status}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
         </div>
     );

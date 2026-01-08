@@ -20,6 +20,14 @@ export class ApplicationsController {
         return this.applicationsService.apply(req.user.userId, jobId);
     }
 
+    @Get('check/:jobId')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Check if current user has applied to a job' })
+    async checkApplication(@Request() req, @Param('jobId') jobId: string) {
+        return this.applicationsService.checkApplication(req.user.userId, jobId);
+    }
+
     @Get('my-applications')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.STUDENT)

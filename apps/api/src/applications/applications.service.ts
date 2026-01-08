@@ -207,4 +207,33 @@ export class ApplicationsService {
             data: { status },
         });
     }
+    async checkApplication(userId: string, jobId: string) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: { student: true },
+        });
+
+        if (!user || !user.student) {
+            return { hasApplied: false };
+        }
+
+        const application = await this.prisma.application.findUnique({
+            where: {
+                studentId_jobId: {
+                    studentId: user.student.id,
+                    jobId: jobId,
+                },
+            },
+            select: {
+                status: true,
+                appliedAt: true,
+            },
+        });
+
+        return {
+            hasApplied: !!application,
+            status: application?.status,
+            appliedAt: application?.appliedAt
+        };
+    }
 }

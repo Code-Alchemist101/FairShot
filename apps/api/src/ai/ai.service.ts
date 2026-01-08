@@ -41,7 +41,13 @@ Create a comprehensive study plan with the following sections:
 
 3. PREPARATION TIPS: Provide 5 actionable tips for preparing for this assessment. Focus on real-world practice, not just theory. Return as an array of strings.
 
-4. SAMPLE QUESTIONS: Create 3 sample questions (mix of MCQ and coding) that represent what they might face. For coding questions, include the problem statement only. Return as an array of objects with 'type', 'question', and 'options' for MCQ or 'difficulty' for coding.
+4. SAMPLE QUESTIONS: Create 3 sample questions (mix of MCQ and coding). Return as an array of objects with:
+   - 'type': "MCQ" or "CODING"
+   - 'question': The question text
+   - 'options': Array of strings (for MCQ only)
+   - 'answer': The correct answer string (for MCQ) or a brief solution description (for CODING)
+   - 'explanation': Brief explanation of why the answer is correct or key concepts involved.
+   - 'difficulty': "Easy", "Medium", or "Hard"
 
 Format your response as JSON with keys: examPattern (string), requiredSkills (array of strings), prepTips (array of strings), sampleQuestions (array of objects).
 
@@ -66,12 +72,17 @@ Example format:
     {
       "type": "MCQ",
       "question": "What is the purpose of useEffect hook in React?",
-      "options": ["State management", "Side effects handling", "Component rendering", "Event handling"]
+      "options": ["State management", "Side effects handling", "Component rendering", "Event handling"],
+      "answer": "Side effects handling",
+      "explanation": "useEffect is designed to perform side effects in function components, such as data fetching or subscriptions.",
+      "difficulty": "Easy"
     },
     {
       "type": "CODING",
       "question": "Implement a function to debounce API calls in a search input",
-      "difficulty": "Medium"
+      "difficulty": "Medium",
+      "answer": "Use a timer to delay execution until the user stops typing for a set duration.",
+      "explanation": "Debouncing prevents excessive API calls by ensuring the function only fires after a pause in events."
     }
   ]
 }`;

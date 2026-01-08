@@ -45,14 +45,30 @@ export class ProctoringGateway {
             // Save batch (creates single ProctoringEvent row)
             const result = await this.proctoringService.saveBatch(sessionId, events);
 
-            // If high risk, emit warning back to client
+            // If high risk, emit warning
             if (result.shouldWarn) {
+                const reasons = [];
+                if (result.details?.tabSwitches > 0) reasons.push(`${result.details.tabSwitches} Tab Switches`);
+                if (result.details?.fullscreenExits > 0) reasons.push(`${result.details.fullscreenExits} Fullscreen Exits`);
+
+                const reasonText = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
+
                 client.emit('proctoring-warning', {
-                    message: 'Suspicious activity detected. Please stay focused on the assessment.',
+                    message: `Suspicious activity detected${reasonText}. Please stay focused.`,
                     riskScore: result.riskScore,
+                    warningCount: result.warningCount,
                 });
 
                 this.logger.warn(`High risk detected for session ${sessionId}`);
+            }
+
+            // Check for termination
+            if (result.shouldTerminate) {
+                client.emit('session-terminated', {
+                    reason: 'Excessive Tab Switching',
+                });
+                // Force disconnect
+                client.disconnect();
             }
 
             // Acknowledge receipt

@@ -39,21 +39,28 @@ const difficultyColors = {
     HARD: 'bg-red-500/10 text-red-400 border-red-500/20',
 };
 
-export function QuizComponent({ questions, onSubmit, readonly = false, existingAnswers = {} }: QuizComponentProps) {
+export function QuizComponent({
+    questions,
+    onSubmit,
+    readonly = false,
+    answers,
+    onAnswerSelect
+}: {
+    questions: MCQQuestion[];
+    onSubmit: (answers: Record<string, number>) => Promise<void>;
+    readonly?: boolean;
+    answers: Record<string, number>;
+    onAnswerSelect: (questionId: string, answerIndex: number) => void;
+}) {
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, number>>(existingAnswers);
     const [submitting, setSubmitting] = useState(false);
 
     const currentQuestion = questions[currentIndex];
     const allAnswered = questions.every(q => answers[q.id] !== undefined);
 
     const handleAnswerSelect = (answerIndex: number) => {
-        if (readonly) return; // Prevent changes in readonly mode
-
-        setAnswers(prev => ({
-            ...prev,
-            [currentQuestion.id]: answerIndex,
-        }));
+        if (readonly) return;
+        onAnswerSelect(currentQuestion.id, answerIndex);
     };
 
     const handleNext = () => {

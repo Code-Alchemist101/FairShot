@@ -154,7 +154,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                             size="sm"
                             onClick={() => {
                                 logout();
-                                router.push('/login');
+                                window.location.href = '/login';
                             }}
                             className="text-slate-400 hover:text-white hover:bg-slate-800"
                         >

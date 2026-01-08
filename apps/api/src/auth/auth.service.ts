@@ -12,17 +12,24 @@ export class AuthService {
     ) { }
 
     async validateUser(email: string, password: string): Promise<any> {
+        console.log(`[AuthDebug] ValidateUser called for: ${email}`);
+
         const user = await this.usersService.findByEmail(email);
 
         if (!user) {
+            console.log(`[AuthDebug] User NOT found: ${email}`);
             return null;
         }
 
+        console.log(`[AuthDebug] User found (ID: ${user.id}). Comparing password...`);
         const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
         if (!isPasswordValid) {
+            console.log(`[AuthDebug] Password MISMATCH for: ${email}`);
             return null;
         }
+
+        console.log(`[AuthDebug] Login SUCCESS for: ${email}`);
 
         // Remove password from response
         const { passwordHash, ...result } = user;

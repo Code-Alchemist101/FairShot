@@ -13,9 +13,10 @@ interface ProctoringEvent {
 interface UseProctoringOptions {
     sessionId: string;
     enabled?: boolean;
+    onGazeUpdate?: (x: number, y: number) => void;
 }
 
-export function useProctoring({ sessionId, enabled = true }: UseProctoringOptions) {
+export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UseProctoringOptions) {
     const [isTracking, setIsTracking] = useState(false);
     const [warning, setWarning] = useState('');
     const socketRef = useRef<Socket | null>(null);
@@ -38,9 +39,23 @@ export function useProctoring({ sessionId, enabled = true }: UseProctoringOption
             setTimeout(() => setWarning(''), 5000);
         });
 
+        socketRef.current.on('session-terminated', (data: { reason: string }) => {
+            alert(`Assessment Terminated: ${data.reason}`);
+            window.location.href = '/dashboard';
+        });
+
         // Initialize WebGazer (client-side only)
         const initWebGazer = async () => {
             try {
+                // Explicitly request camera permission first to ensure hardware light turns on
+                try {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                } catch (err) {
+                    console.error('Camera permission denied:', err);
+                    setWarning('Camera access required for proctoring. Please enable it.');
+                    return;
+                }
+
                 const webgazer = (await import('webgazer')).default;
                 let lastGazeTime = 0;
 
@@ -56,6 +71,11 @@ export function useProctoring({ sessionId, enabled = true }: UseProctoringOption
                                 x: data.x,
                                 y: data.y,
                             });
+                        }
+
+                        // Real-time update for UI dot (runs every frame)
+                        if (onGazeUpdate && data) {
+                            onGazeUpdate(data.x, data.y);
                         }
                     })
                     .begin();
@@ -140,5 +160,11 @@ export function useProctoring({ sessionId, enabled = true }: UseProctoringOption
         isTracking,
         warning,
         clearWarning: () => setWarning(''),
+        calibratePoint: async (x: number, y: number) => {
+            if (typeof window !== 'undefined') {
+                const webgazer = (await import('webgazer')).default;
+                webgazer.recordScreenPosition(x, y, 'click'); // Train the model
+            }
+        }
     };
 }

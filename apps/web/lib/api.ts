@@ -28,10 +28,13 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Clear auth state and redirect to login
+            // Clear auth state and redirect to login using the store action
+            // This ensures cookies are also cleared, preventing the middleware loop
             if (typeof window !== 'undefined') {
-                localStorage.removeItem('fairshot-auth');
-                window.location.href = '/login';
+                import('@/lib/auth').then(({ useAuth }) => {
+                    useAuth.getState().logout();
+                    window.location.href = '/login';
+                });
             }
         }
         return Promise.reject(error);

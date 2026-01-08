@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Users, Briefcase, CreditCard } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Plus, Users, Briefcase, CreditCard, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export function CompanyView() {
@@ -42,7 +44,20 @@ export function CompanyView() {
         }
     };
 
+    const activeJobs = jobs.filter((job: any) => job.status === 'ACTIVE');
+    const draftJobs = jobs.filter((job: any) => job.status === 'DRAFT');
+    const closedJobs = jobs.filter((job: any) => ['CLOSED', 'ARCHIVED'].includes(job.status));
+
     const totalApplicants = jobs.reduce((acc, job: any) => acc + (job._count?.applications || 0), 0);
+
+    const handleStatusUpdate = async (jobId: string, newStatus: string) => {
+        try {
+            await api.put(`/jobs/${jobId}`, { status: newStatus });
+            fetchJobs(); // Refresh list
+        } catch (error) {
+            console.error('Failed to update status:', error);
+        }
+    };
 
     return (
         <div className="space-y-8">
@@ -54,7 +69,7 @@ export function CompanyView() {
                         <Briefcase className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{jobs.length}</div>
+                        <div className="text-2xl font-bold">{activeJobs.length}</div>
                         <p className="text-xs text-muted-foreground">Currently live on the platform</p>
                     </CardContent>
                 </Card>
@@ -65,7 +80,7 @@ export function CompanyView() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{totalApplicants}</div>
-                        <p className="text-xs text-muted-foreground">Across all active jobs</p>
+                        <p className="text-xs text-muted-foreground">Across all jobs</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -88,7 +103,7 @@ export function CompanyView() {
                 </Card>
             </div>
 
-            {/* Active Jobs List */}
+            {/* Jobs Tabs */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-bold">Your Jobs</h2>
@@ -101,43 +116,116 @@ export function CompanyView() {
                     <div className="flex justify-center py-12">
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
-                ) : jobs.length === 0 ? (
-                    <Card>
-                        <CardContent className="py-12 text-center">
-                            <p className="text-muted-foreground">You haven't posted any jobs yet.</p>
-                            <Button variant="link" onClick={() => router.push('/company/post-job')}>
-                                Create your first job posting
-                            </Button>
-                        </CardContent>
-                    </Card>
                 ) : (
-                    <div className="grid gap-4">
-                        {jobs.map((job: any) => (
-                            <Card key={job.id}>
-                                <CardHeader>
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <CardTitle>{job.title}</CardTitle>
-                                            <CardDescription>
-                                                Posted on {new Date(job.createdAt).toLocaleDateString()} • {job.location} • {job.jobType}
-                                            </CardDescription>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-right">
-                                                <div className="text-2xl font-bold">{job._count?.applications || 0}</div>
-                                                <div className="text-xs text-muted-foreground">Applicants</div>
-                                            </div>
-                                            <Button variant="outline" onClick={() => router.push(`/company/job/${job.id}/applicants`)}>
-                                                View Applicants
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                            </Card>
-                        ))}
-                    </div>
+                    <Tabs defaultValue="active" className="w-full">
+                        <TabsList className="grid w-full grid-cols-3 mb-4 max-w-md">
+                            <TabsTrigger value="active">Active ({activeJobs.length})</TabsTrigger>
+                            <TabsTrigger value="draft">Drafts ({draftJobs.length})</TabsTrigger>
+                            <TabsTrigger value="closed">Closed ({closedJobs.length})</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="active">
+                            <JobList
+                                jobs={activeJobs}
+                                type="active"
+                                onStatusUpdate={handleStatusUpdate}
+                                emptyMessage="No active jobs. Post one now!"
+                                router={router}
+                            />
+                        </TabsContent>
+                        <TabsContent value="draft">
+                            <JobList
+                                jobs={draftJobs}
+                                type="draft"
+                                onStatusUpdate={handleStatusUpdate}
+                                emptyMessage="No draft jobs."
+                                router={router}
+                            />
+                        </TabsContent>
+                        <TabsContent value="closed">
+                            <JobList
+                                jobs={closedJobs}
+                                type="closed"
+                                onStatusUpdate={handleStatusUpdate}
+                                emptyMessage="No closed or archived jobs."
+                                router={router}
+                            />
+                        </TabsContent>
+                    </Tabs>
                 )}
             </div>
+        </div>
+    );
+}
+
+function JobList({
+    jobs,
+    type,
+    emptyMessage,
+    onStatusUpdate,
+    router
+}: {
+    jobs: any[],
+    type: 'active' | 'draft' | 'closed',
+    emptyMessage: string,
+    onStatusUpdate: (id: string, status: string) => void,
+    router: any
+}) {
+    if (jobs.length === 0) {
+        return (
+            <Card>
+                <CardContent className="py-12 text-center">
+                    <p className="text-muted-foreground">{emptyMessage}</p>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    return (
+        <div className="grid gap-4">
+            {jobs.map((job: any) => (
+                <Card key={job.id}>
+                    <CardHeader>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <CardTitle>{job.title}</CardTitle>
+                                        <Badge variant={job.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                                            {job.status}
+                                        </Badge>
+                                    </div>
+                                </div>
+                                <CardDescription>
+                                    Posted on {new Date(job.createdAt).toLocaleDateString()} • {job.location} • {job.jobType}
+                                </CardDescription>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <div className="text-2xl font-bold">{job._count?.applications || 0}</div>
+                                    <div className="text-xs text-muted-foreground">Applicants</div>
+                                </div>
+                                <Button variant="outline" onClick={() => router.push(`/company/job/${job.id}/applicants`)}>
+                                    View Applicants
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => router.push(`/company/jobs/${job.id}/edit`)}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                                {type === 'active' && (
+                                    <Button variant="ghost" className="text-destructive hover:text-destructive" onClick={() => onStatusUpdate(job.id, 'CLOSED')}>
+                                        Close
+                                    </Button>
+                                )}
+                                {type === 'draft' && (
+                                    <Button variant="ghost" className="text-green-600 hover:text-green-700" onClick={() => onStatusUpdate(job.id, 'ACTIVE')}>
+                                        Publish
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    </CardHeader>
+                </Card>
+            ))}
         </div>
     );
 }

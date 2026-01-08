@@ -17,6 +17,8 @@ export default function JobDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [applying, setApplying] = useState(false);
 
+    const [applicationStatus, setApplicationStatus] = useState<{ hasApplied: boolean, status?: string } | null>(null);
+
     useEffect(() => {
         const fetchJob = async () => {
             try {
@@ -34,8 +36,19 @@ export default function JobDetailsPage() {
             }
         };
 
+        const checkApplication = async () => {
+            try {
+                const response = await api.get(`/applications/check/${params.jobId}`);
+                setApplicationStatus(response.data);
+            } catch (error) {
+                // Ignore 401/403 if not logged in
+                console.log('User not logged in or check failed');
+            }
+        };
+
         if (params.jobId) {
             fetchJob();
+            checkApplication();
         }
     }, [params.jobId, toast]);
 
@@ -47,7 +60,10 @@ export default function JobDetailsPage() {
                 title: 'Application submitted!',
                 description: 'Your resource pack is being generated. Check "My Applications" tab.',
             });
-            router.push('/dashboard');
+            // Update local state
+            setApplicationStatus({ hasApplied: true, status: 'ASSESSMENT_PENDING' });
+            // Optional: Redirect or stay
+            // router.push('/dashboard'); 
         } catch (error: any) {
             toast({
                 title: 'Application failed',
@@ -57,6 +73,16 @@ export default function JobDetailsPage() {
         } finally {
             setApplying(false);
         }
+    };
+
+    const buttonContent = () => {
+        if (applying) {
+            return <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Applying...</>;
+        }
+        if (applicationStatus?.hasApplied) {
+            return 'Applied ✅';
+        }
+        return 'Apply Now';
     };
 
     if (loading) {
@@ -101,14 +127,13 @@ export default function JobDetailsPage() {
                                 </div>
                             </div>
                         </div>
-                        <Button size="lg" onClick={handleApply} disabled={applying}>
-                            {applying ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Applying...
-                                </>
-                            ) : (
-                                'Apply Now'
-                            )}
+                        <Button
+                            size="lg"
+                            onClick={handleApply}
+                            disabled={applying || applicationStatus?.hasApplied}
+                            variant={applicationStatus?.hasApplied ? "secondary" : "default"}
+                        >
+                            {buttonContent()}
                         </Button>
                     </div>
 
@@ -139,9 +164,26 @@ export default function JobDetailsPage() {
                             </p>
                         </section>
 
+                        {/* Qualifications Section */}
+                        {job.qualifications && job.qualifications.length > 0 && (
+                            <section>
+                                <h2 className="text-xl font-semibold mb-4">Qualifications</h2>
+                                <ul className="list-disc list-inside space-y-2 text-slate-600 dark:text-slate-300 ml-2">
+                                    {(Array.isArray(job.qualifications) ? job.qualifications : JSON.parse(job.qualifications)).map((qual: string, index: number) => (
+                                        <li key={index}>{qual}</li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+
                         <section>
                             <h2 className="text-xl font-semibold mb-4">Required Skills</h2>
                             <div className="flex flex-wrap gap-2">
+                                {Array.isArray(job.tags) && job.tags.map((tag: string, index: number) => (
+                                    <Badge key={`tag-${index}`} className="px-3 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-none hover:bg-blue-200">
+                                        {tag}
+                                    </Badge>
+                                ))}
                                 {Array.isArray(job.requiredSkills) && job.requiredSkills.map((skill: string, index: number) => (
                                     <Badge key={index} variant="secondary" className="px-3 py-1">
                                         {skill}
@@ -154,6 +196,11 @@ export default function JobDetailsPage() {
                             <h2 className="text-xl font-semibold mb-4">About the Company</h2>
                             <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-lg">
                                 <h3 className="font-medium text-lg mb-2">{job.company.companyName}</h3>
+                                {job.aboutCompany && (
+                                    <p className="text-slate-600 dark:text-slate-300 mb-4 whitespace-pre-line">
+                                        {job.aboutCompany}
+                                    </p>
+                                )}
                                 <div className="grid grid-cols-2 gap-4 text-sm text-slate-600 dark:text-slate-400">
                                     {job.company.industry && (
                                         <div>

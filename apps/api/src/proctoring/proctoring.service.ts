@@ -22,9 +22,50 @@ export class ProctoringService {
     async saveBatch(sessionId: string, events: ProctoringEventData[]) {
         // Analyze risk score
         const riskScore = this.analyzeRisk(events);
+        const tabSwitches = events.filter((e) => e.type === 'TAB_SWITCH').length;
+
+        // Retrieve current session to get warning count
+        const session = await this.prisma.assessmentSession.findUnique({
+            where: { id: sessionId },
+            select: { warningCount: true, status: true, applicationId: true }
+        });
+
+        if (!session) {
+            throw new Error('Session not found');
+        }
+
+        // Calculate new warning count
+        const newWarningCount = session.warningCount + tabSwitches;
+        let shouldTerminate = false;
+
+        // Check if limit exceeded (Max 3 allowed, 4th kills it)
+        if (newWarningCount > 3 && session.status !== 'TERMINATED' && session.status !== 'COMPLETED') {
+            shouldTerminate = true;
+            await this.prisma.$transaction([
+                this.prisma.assessmentSession.update({
+                    where: { id: sessionId },
+                    data: {
+                        status: 'TERMINATED',
+                        terminatedReason: 'Excessive Tab Switching',
+                        endTime: new Date(),
+                    }
+                }),
+                this.prisma.application.update({
+                    where: { id: session.applicationId },
+                    data: { status: 'REJECTED' }
+                })
+            ]);
+            this.logger.warn(`Session ${sessionId} TERMINATED due to excessive tab switching.`);
+        } else if (tabSwitches > 0) {
+            // Just update count if not terminating
+            await this.prisma.assessmentSession.update({
+                where: { id: sessionId },
+                data: { warningCount: newWarningCount }
+            });
+        }
 
         // Create single ProctoringEvent row with all events in JSONB
-        const proctoringEvent = await this.prisma.proctoringEvent.create({
+        await this.prisma.proctoringEvent.create({
             data: {
                 sessionId,
                 events, // Prisma will store this as JSONB
@@ -32,13 +73,19 @@ export class ProctoringService {
             },
         });
 
-        this.logger.log(`Saved batch of ${events.length} events for session ${sessionId} with risk score ${riskScore}`);
+        this.logger.log(`Saved batch of ${events.length} events for session ${sessionId}. Warnings: ${newWarningCount}`);
 
         return {
             saved: true,
             eventCount: events.length,
             riskScore,
-            shouldWarn: riskScore > 50, // Warn if risk score > 50
+            shouldWarn: riskScore > 50,
+            shouldTerminate,
+            warningCount: newWarningCount,
+            details: {
+                tabSwitches,
+                fullscreenExits: events.filter((e) => e.type === 'FULLSCREEN_EXIT').length
+            }
         };
     }
 
