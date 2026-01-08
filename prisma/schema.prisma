@@ -1,0 +1,486 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+enum UserRole {
+  STUDENT
+  COMPANY
+  ADMIN
+}
+
+enum CompanyVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          UserRole
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relationships
+  student       Student?
+  company       Company?
+  
+  @@index([email])
+}
+
+model Student {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  fullName        String
+  phone           String?
+  resumeUrl       String?
+  linkedinUrl     String?
+  githubUrl       String?
+  
+  // Skills (stored as JSON array)
+  skills          Json     @default("[]")
+  experience      String?  // "Fresher", "0-2 years", etc.
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  applications    Application[]
+  assessmentSessions AssessmentSession[]
+  skillReports    SkillReport[]
+  
+  @@index([userId])
+}
+
+model Company {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  companyName           String
+  website               String
+  industry              String?
+  companySize           String?  // "1-10", "11-50", etc.
+  logoUrl               String?
+  
+  // Verification
+  verificationStatus    CompanyVerificationStatus @default(PENDING)
+  verificationDocUrl    String?  // Funding proof, registration certificate
+  verifiedAt            DateTime?
+  rejectionReason       String?
+  
+  // Pay-Per-Registration Credits System
+  creditsBalance        Int      @default(0)  // Number of assessment credits remaining
+  stripeCustomerId      String?  @unique
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relationships
+  jobs                  Job[]
+  payments              Payment[]
+  
+  @@index([userId])
+  @@index([verificationStatus])
+}
+
+// ============================================
+// JOB POSTINGS & APPLICATIONS
+// ============================================
+
+enum JobStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Job {
+  id                String    @id @default(cuid())
+  companyId         String
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  title             String
+  description       String    @db.Text
+  location          String
+  jobType           String    // "Full-time", "Internship", etc.
+  
+  // Compensation
+  salaryMin         Int?
+  salaryMax         Int?
+  currency          String    @default("INR")
+  
+  // Required skills (JSON array)
+  requiredSkills    Json      @default("[]")
+  
+  // Assessment Configuration
+  assessmentConfig  Json      @default("{}") // { modules: ["MCQ", "CODING"], timeLimit: 60, allowedTools: ["MDN", "W3Schools"] }
+  
+  status            JobStatus @default(DRAFT)
+  publishedAt       DateTime?
+  closesAt          DateTime?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relationships
+  applications      Application[]
+  resourcePacks     ResourcePack[]
+  
+  @@index([companyId])
+  @@index([status])
+}
+
+enum ApplicationStatus {
+  APPLIED
+  ASSESSMENT_PENDING
+  ASSESSMENT_IN_PROGRESS
+  ASSESSMENT_COMPLETED
+  UNDER_REVIEW
+  SHORTLISTED
+  REJECTED
+  OFFER_SENT
+  HIRED
+}
+
+model Application {
+  id                String              @id @default(cuid())
+  studentId         String
+  student           Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  jobId             String
+  job               Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  status            ApplicationStatus   @default(APPLIED)
+  appliedAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relationships
+  assessmentSessions AssessmentSession[]
+  skillReport       SkillReport?
+  
+  @@unique([studentId, jobId]) // One application per student per job
+  @@index([studentId])
+  @@index([jobId])
+  @@index([status])
+}
+
+// ============================================
+// RESOURCE PACKS (Auto-generated on Registration)
+// ============================================
+
+model ResourcePack {
+  id                String   @id @default(cuid())
+  jobId             String
+  job               Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // AI-generated content
+  examPattern       String   @db.Text  // "You'll face 20 MCQs, 2 coding problems..."
+  requiredSkills    String   @db.Text  // "Master React hooks, async/await..."
+  prepTips          String   @db.Text  // "Focus on real-world scenarios..."
+  sampleQuestions   Json     @default("[]") // Array of sample questions
+  
+  generatedAt       DateTime @default(now())
+  
+  @@index([jobId])
+}
+
+// ============================================
+// ASSESSMENT ENGINE (CRITICAL TABLE)
+// ============================================
+
+enum AssessmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  TERMINATED  // Terminated due to cheating
+}
+
+model AssessmentSession {
+  id                String            @id @default(cuid())
+  applicationId     String
+  application       Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  studentId         String
+  student           Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  status            AssessmentStatus  @default(NOT_STARTED)
+  startTime         DateTime?
+  endTime           DateTime?
+  durationMinutes   Int               @default(60)
+  
+  // Proctoring
+  calibrationData   Json?             // Eye tracking calibration points: { points: [{x, y, timestamp}] }
+  warningCount      Int               @default(0)
+  terminatedReason  String?
+  
+  // Scores
+  score             Float?            // Overall score (0-100)
+  integrityScore    Float?            // Anti-cheat score (0-100, lower = more suspicious)
+  
+  // Detailed module scores
+  mcqScore          Float?
+  codingScore       Float?
+  appDevScore       Float?
+  communicationScore Float?
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relationships
+  mcqResponses      MCQResponse[]
+  codeSubmissions   CodeSubmission[]
+  proctoringEvents  ProctoringEvent[]  // OPTIMIZED: Bulk storage
+  toolUsageLogs     ToolUsageLog[]
+  
+  @@index([applicationId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ============================================
+// MCQ MODULE
+// ============================================
+
+enum MCQDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model MCQQuestion {
+  id                String        @id @default(cuid())
+  question          String        @db.Text
+  options           Json          // ["Option A", "Option B", ...]
+  correctAnswer     Int           // Index of correct option
+  explanation       String?       @db.Text
+  difficulty        MCQDifficulty
+  tags              Json          @default("[]") // ["JavaScript", "Async"]
+  
+  createdAt         DateTime      @default(now())
+  
+  // Relationships
+  responses         MCQResponse[]
+  
+  @@index([difficulty])
+}
+
+model MCQResponse {
+  id                String            @id @default(cuid())
+  sessionId         String
+  session           AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          MCQQuestion       @relation(fields: [questionId], references: [id])
+  
+  selectedAnswer    Int?              // Index of selected option
+  isCorrect         Boolean?
+  timeSpentSeconds  Int
+  
+  answeredAt        DateTime          @default(now())
+  
+  @@index([sessionId])
+}
+
+// ============================================
+// CODING MODULE
+// ============================================
+
+enum CodeSubmissionStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  ERROR
+  TIME_LIMIT_EXCEEDED
+}
+
+model CodingProblem {
+  id                String   @id @default(cuid())
+  title             String
+  description       String   @db.Text
+  difficulty        String   // "EASY", "MEDIUM", "HARD"
+  tags              Json     @default("[]")
+  
+  // Test cases
+  testCases         Json     // [{ input: "...", expectedOutput: "..." }]
+  
+  // Constraints
+  timeLimitMs       Int      @default(5000)
+  memoryLimitMB     Int      @default(256)
+  
+  createdAt         DateTime @default(now())
+  
+  // Relationships
+  submissions       CodeSubmission[]
+  
+  @@index([difficulty])
+}
+
+model CodeSubmission {
+  id                String                @id @default(cuid())
+  sessionId         String
+  session           AssessmentSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  problemId         String
+  problem           CodingProblem         @relation(fields: [problemId], references: [id])
+  
+  code              String                @db.Text
+  language          String                // "javascript", "python", etc.
+  
+  // Judge0 Cloud API Response
+  status            CodeSubmissionStatus  @default(QUEUED)
+  stdout            String?               @db.Text
+  stderr            String?               @db.Text
+  compileOutput     String?               @db.Text
+  executionTimeMs   Int?
+  memoryUsedKB      Int?
+  
+  testCasesPassed   Int                   @default(0)
+  testCasesTotal    Int
+  score             Float?
+  
+  submittedAt       DateTime              @default(now())
+  
+  @@index([sessionId])
+  @@index([status])
+}
+
+// ============================================
+// PROCTORING SYSTEM (OPTIMIZED FOR PERFORMANCE)
+// ============================================
+
+// CRITICAL OPTIMIZATION: Instead of creating a row per event (thousands per session),
+// we batch events every 2 seconds and store them in JSONB arrays.
+// This reduces DB writes from ~30/sec to ~0.5/sec per student.
+
+model ProctoringEvent {
+  id                String            @id @default(cuid())
+  sessionId         String
+  session           AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Batch timestamp (events are grouped by 2-second windows)
+  batchTimestamp    DateTime          @default(now())
+  
+  // JSONB array of events in this batch
+  // Example: [
+  //   { type: "EYE_TRACKING", timestamp: 1234567890, x: 0.5, y: 0.3 },
+  //   { type: "EYE_AWAY", timestamp: 1234567891, duration: 1.2 },
+  //   { type: "TAB_SWITCH", timestamp: 1234567892 }
+  // ]
+  events            Json              @db.JsonB
+  
+  // Aggregated risk score for this batch (calculated server-side)
+  riskScore         Float             @default(0)
+  
+  @@index([sessionId])
+  @@index([batchTimestamp])
+}
+
+// ============================================
+// AI TOOL USAGE ANALYSIS
+// ============================================
+
+enum ToolUsageRiskLevel {
+  GREEN   // Legitimate learning
+  YELLOW  // Borderline
+  RED     // Cheating
+}
+
+model ToolUsageLog {
+  id                String                @id @default(cuid())
+  sessionId         String
+  session           AssessmentSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  query             String                @db.Text  // What the user searched/asked
+  context           String?               @db.Text  // The problem they were solving
+  
+  riskLevel         ToolUsageRiskLevel
+  aiReason          String?               @db.Text  // AI's explanation
+  
+  timestamp         DateTime              @default(now())
+  
+  @@index([sessionId])
+  @@index([riskLevel])
+}
+
+// ============================================
+// SKILL REPORTS (Feedback System)
+// ============================================
+
+model SkillReport {
+  id                String      @id @default(cuid())
+  applicationId     String      @unique
+  application       Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  studentId         String
+  student           Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  // Overall metrics
+  overallScore      Float
+  integrityScore    Float       // How trustworthy was their performance?
+  percentile        Float?      // Compared to other candidates
+  
+  // Detailed breakdown
+  codeCorrectness   Float?
+  toolUsageEfficiency Float?    // Did they rely too much on AI?
+  debuggingApproach Float?
+  communicationClarity Float?
+  
+  // AI-generated feedback
+  strengths         String      @db.Text
+  weaknesses        String      @db.Text
+  improvementTips   String      @db.Text
+  
+  // Company decision
+  isShortlisted     Boolean     @default(false)
+  rejectionReason   String?     @db.Text
+  
+  generatedAt       DateTime    @default(now())
+  
+  @@index([studentId])
+}
+
+// ============================================
+// PAYMENT SYSTEM (Pay-Per-Registration)
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  companyId         String
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  amount            Float
+  currency          String        @default("INR")
+  
+  // Stripe integration
+  stripePaymentId   String?       @unique
+  status            PaymentStatus @default(PENDING)
+  
+  // What this payment is for
+  description       String        // "50 assessment credits"
+  creditsAdded      Int           // Number of credits purchased
+  
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  
+  @@index([companyId])
+  @@index([status])
+}

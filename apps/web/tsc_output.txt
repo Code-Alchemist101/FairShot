@@ -1,0 +1,10 @@
+﻿app/company/job/[jobId]/applicants/page.tsx(14,8): error TS2307: Cannot find module '@/components/ui/table' or its corresponding type declarations.
+app/company/post-job/page.tsx(8,26): error TS2307: Cannot find module '@/components/ui/textarea' or its corresponding type declarations.
+app/company/post-job/page.tsx(13,26): error TS2307: Cannot find module '@/components/ui/checkbox' or its corresponding type declarations.
+app/company/post-job/page.tsx(116,48): error TS7006: Parameter 'e' implicitly has an 'any' type.
+app/company/post-job/page.tsx(225,63): error TS7006: Parameter 'checked' implicitly has an 'any' type.
+app/company/post-job/page.tsx(239,63): error TS7006: Parameter 'checked' implicitly has an 'any' type.
+hooks/useProctoring.ts(46,48): error TS7016: Could not find a declaration file for module 'webgazer'. 'C:/Users/hosan/Desktop/FairShot MVP/FairShot/node_modules/webgazer/dist/webgazer.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/webgazer` if it exists or add a new declaration (.d.ts) file containing `declare module 'webgazer';`
+hooks/useProctoring.ts(124,24): error TS7016: Could not find a declaration file for module 'webgazer'. 'C:/Users/hosan/Desktop/FairShot MVP/FairShot/node_modules/webgazer/dist/webgazer.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/webgazer` if it exists or add a new declaration (.d.ts) file containing `declare module 'webgazer';`
