@@ -65,4 +65,25 @@ export class JobsController {
         });
         return this.jobsService.findByCompany(user.company.id);
     }
+    @Post(':id/generate-questions')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.COMPANY)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Generate questions using AI (Draft)' })
+    async generateQuestions(@Request() req, @Param('id') id: string) {
+        return this.jobsService.generateQuestionsForJob(req.user.userId, id);
+    }
+
+    @Post(':id/save-questions')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.COMPANY)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Save approved AI questions' })
+    async saveQuestions(
+        @Request() req,
+        @Param('id') id: string,
+        @Body() body: { mcqs: any[]; coding: any[] }
+    ) {
+        return this.jobsService.saveQuestionsForJob(req.user.userId, id, body);
+    }
 }

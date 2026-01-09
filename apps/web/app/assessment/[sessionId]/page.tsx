@@ -14,6 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Play, Clock, Loader2, FileCode, Globe, ClipboardList } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const pageVariants = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 }
+};
 
 export default function AssessmentPage() {
     const params = useParams();
@@ -22,7 +29,7 @@ export default function AssessmentPage() {
 
     const [session, setSession] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [code, setCode] = useState('console.log(\"Hello World\");');
+    const [code, setCode] = useState('// Write your code here\n');
     const [timeRemaining, setTimeRemaining] = useState(3600);
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
@@ -139,6 +146,16 @@ export default function AssessmentPage() {
             document.head.removeChild(style);
         };
     }, []);
+
+    const activeProblem = session?.codeSubmissions?.[0]?.problem;
+    const activeSubmission = session?.codeSubmissions?.[0];
+
+    // Initialize code from saved submission
+    useEffect(() => {
+        if (activeSubmission?.code) {
+            setCode(activeSubmission.code);
+        }
+    }, [activeSubmission]);
 
     const handleRunCode = async () => {
         setSubmitting(true);
@@ -262,35 +279,38 @@ export default function AssessmentPage() {
     const hasMCQ = session?.mcqResponses?.length > 0;
     const hasCoding = session?.application?.job?.assessmentConfig?.modules?.includes('CODING');
 
+
+
     return (
-        <div className="h-screen w-screen bg-slate-900 flex flex-col overflow-hidden">
+        <div className="h-screen w-screen bg-background flex flex-col overflow-hidden text-foreground">
             {/* Calibration Overlay - blocks everything until passed */}
             {!isCalibrated && (
                 <CalibrationOverlay
                     onComplete={() => setIsCalibrated(true)}
                     calibratePoint={calibratePoint}
                     gazeRef={gazeRef}
+                    isTracking={isTracking}
                 />
             )}
 
             {/* Header */}
-            <div className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
+            <div className="bg-card border-b px-6 py-3 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold text-white">
+                    <h1 className="text-xl font-bold">
                         {session?.application?.job?.title || 'Assessment'}
                     </h1>
                     {isTracking && (
-                        <span className="text-xs text-green-400 flex items-center gap-1">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                        <span className="text-xs text-green-500 font-medium flex items-center gap-1 bg-green-500/10 px-2 py-1 rounded-full border border-green-500/20">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                             Proctoring Active
                         </span>
                     )}
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-white">
+                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md border">
                         <Clock className="w-4 h-4" />
-                        <span className="font-mono text-lg">{formatTime(timeRemaining)}</span>
+                        <span className="font-mono text-lg font-medium text-foreground">{formatTime(timeRemaining)}</span>
                     </div>
 
                     {hasCoding && (
@@ -316,129 +336,169 @@ export default function AssessmentPage() {
             </div>
 
             {/* Warning */}
-            {warning && (
-                <div className="m-4 p-3 bg-red-900/30 border border-red-700 rounded text-white">
-                    {warning}
-                </div>
-            )}
+            <AnimatePresence>
+                {warning && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="m-4 mb-0 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive flex items-center justify-center font-medium"
+                    >
+                        {warning}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Main Content with Tabs */}
             <div className="flex-1 p-4 overflow-hidden">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-                    <TabsList className="bg-slate-800 border-slate-700">
+                    <TabsList className="bg-muted/50 border self-start mb-2">
                         {hasCoding && (
-                            <TabsTrigger value="problem" className="data-[state=active]:bg-slate-700">
+                            <TabsTrigger value="problem" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
                                 <FileCode className="w-4 h-4 mr-2" />
                                 Problem
                             </TabsTrigger>
                         )}
                         {hasMCQ && (
-                            <TabsTrigger value="quiz" className="data-[state=active]:bg-slate-700">
+                            <TabsTrigger value="quiz" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
                                 <ClipboardList className="w-4 h-4 mr-2" />
                                 Quiz {quizSubmitted && '✓'}
                             </TabsTrigger>
                         )}
-                        <TabsTrigger value="browser" className="data-[state=active]:bg-slate-700">
+                        <TabsTrigger value="browser" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">
                             <Globe className="w-4 h-4 mr-2" />
                             Resources
                         </TabsTrigger>
                     </TabsList>
 
-                    {/* Problem Tab */}
-                    {hasCoding && (
-                        <TabsContent value="problem" className="flex-1 mt-4 overflow-hidden">
-                            <div className="grid grid-cols-12 gap-4 h-full">
-                                {/* Problem Description */}
-                                <div className="col-span-4 overflow-auto">
-                                    <Card className="h-full bg-slate-800 border-slate-700">
-                                        <CardHeader>
-                                            <CardTitle className="text-white">Problem Description</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="text-white space-y-4">
-                                            <div>
-                                                <p className="text-sm">Given an array of integers <code className="bg-slate-700 px-1 rounded">nums</code> and an integer <code className="bg-slate-700 px-1 rounded">target</code>, return indices of the two numbers that add up to target.</p>
-                                            </div>
-
-                                            <div>
-                                                <h3 className="font-semibold mb-2 text-sm">Example:</h3>
-                                                <pre className="bg-slate-900 p-2 rounded text-xs">
-                                                    {`Input: nums = [2,7,11,15], target = 9
-Output: [0,1]`}
-                                                </pre>
-                                            </div>
-
-                                            {result && (
-                                                <div className="mt-4">
-                                                    <h3 className="font-semibold mb-2 text-sm">Result:</h3>
-                                                    <div className={`p-3 rounded text-sm ${result.status === 'Accepted' ? 'bg-green-900/30 border border-green-700' : 'bg-red-900/30 border border-red-700'}`}>
-                                                        <p className="font-medium">{result.status}</p>
-                                                        {result.output && (
-                                                            <pre className="mt-2 text-xs bg-slate-900 p-2 rounded overflow-auto">
-                                                                {result.output}
-                                                            </pre>
-                                                        )}
-                                                        {result.error && (
-                                                            <pre className="mt-2 text-xs bg-red-950 p-2 rounded overflow-auto text-red-300">
-                                                                {result.error}
-                                                            </pre>
-                                                        )}
-                                                        {result.time && <p className="text-xs mt-2">Time: {result.time}s</p>}
-                                                    </div>
+                    <div className="flex-1 relative overflow-hidden rounded-xl border bg-card shadow-sm">
+                        <AnimatePresence>
+                            {/* Problem Tab */}
+                            {hasCoding && activeTab === 'problem' && (
+                                <motion.div
+                                    key="problem"
+                                    variants={pageVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    transition={{ duration: 0.1 }} // Snappier transition
+                                    className="absolute inset-0 flex flex-col"
+                                >
+                                    <TabsContent value="problem" className="flex-1 m-0 h-full p-0">
+                                        <div className="grid grid-cols-12 h-full divide-x">
+                                            {/* Problem Description */}
+                                            <div className="col-span-4 h-full overflow-hidden flex flex-col bg-card/50">
+                                                <div className="p-4 border-b bg-muted/20">
+                                                    <h2 className="font-semibold text-lg">
+                                                        {activeProblem?.title || 'Problem Description'}
+                                                    </h2>
                                                 </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </div>
+                                                <div className="flex-1 overflow-auto p-4 space-y-4">
+                                                    <div>
+                                                        <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                                                            {activeProblem?.description || 'No description available.'}
+                                                        </p>
+                                                    </div>
 
-                                {/* Code Editor */}
-                                <div className="col-span-8 overflow-hidden">
-                                    <Card className="h-full bg-slate-800 border-slate-700">
-                                        <CardHeader className="pb-2">
-                                            <CardTitle className="text-white text-sm">Code Editor</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="h-[calc(100%-4rem)]">
-                                            <CodeEditor
-                                                code={code}
-                                                onChange={(value) => setCode(value || '')}
-                                                language="javascript"
-                                            />
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            </div>
-                        </TabsContent>
-                    )}
+                                                    {activeProblem?.testCases && Array.isArray(activeProblem.testCases) && activeProblem.testCases.length > 0 && (
+                                                        <div className="bg-muted/30 rounded-lg p-3 border">
+                                                            <h3 className="font-semibold mb-2 text-xs uppercase tracking-wider text-muted-foreground">Example</h3>
+                                                            <pre className="text-xs font-mono whitespace-pre-wrap text-foreground">
+                                                                {`Input: ${activeProblem.testCases[0].input}\nOutput: ${activeProblem.testCases[0].expectedOutput}`}
+                                                            </pre>
+                                                        </div>
+                                                    )}
 
-                    {/* Quiz Tab */}
-                    {hasMCQ && (
-                        <TabsContent value="quiz" className="flex-1 mt-4 overflow-hidden">
-                            <Card className="h-full bg-slate-800 border-slate-700">
-                                <CardContent className="h-full p-0">
-                                    <QuizComponent
-                                        questions={session.mcqResponses.map((r: any) => r.question)}
-                                        onSubmit={handleQuizSubmit}
-                                        readonly={quizSubmitted}
-                                        answers={quizAnswers}
-                                        onAnswerSelect={(qId, aIdx) => {
-                                            setQuizAnswers(prev => ({ ...prev, [qId]: aIdx }));
-                                        }}
-                                    />
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                    )}
+                                                    {result && (
+                                                        <div className="mt-4">
+                                                            <h3 className="font-semibold mb-2 text-sm">Execution Result</h3>
+                                                            <div className={`p-3 rounded-lg text-sm border ${result.status === 'Accepted' || result.status === 'COMPLETED' ? 'bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400' : 'bg-red-500/10 border-red-500/20 text-red-700 dark:text-red-400'}`}>
+                                                                <p className="font-bold flex items-center justify-between">
+                                                                    {result.status}
+                                                                    {result.time && <span className="text-xs font-normal opacity-70">{result.time}s</span>}
+                                                                </p>
+                                                                {result.output && (
+                                                                    <div className="mt-2 text-xs bg-background/50 p-2 rounded border overflow-auto">
+                                                                        <span className="opacity-50 block mb-1">Output:</span>
+                                                                        <pre>{result.output}</pre>
+                                                                    </div>
+                                                                )}
+                                                                {result.error && (
+                                                                    <div className="mt-2 text-xs bg-background/50 p-2 rounded border border-red-500/20 overflow-auto text-red-600 dark:text-red-400">
+                                                                        <span className="opacity-50 block mb-1">Error:</span>
+                                                                        <pre>{result.error}</pre>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
 
-                    {/* Browser Tab */}
-                    <TabsContent value="browser" className="flex-1 mt-4 overflow-hidden">
-                        <Card className="h-full bg-slate-800 border-slate-700">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-white text-sm">Allowed Resources</CardTitle>
-                            </CardHeader>
-                            <CardContent className="h-[calc(100%-4rem)]">
-                                <BrowserMock initialUrl="https://www.w3schools.com" />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                                            {/* Code Editor */}
+                                            <div className="col-span-8 h-full flex flex-col bg-[#1e1e1e]">
+                                                <div className="h-full">
+                                                    <CodeEditor
+                                                        code={code}
+                                                        onChange={(value) => setCode(value || '')}
+                                                        language={activeSubmission?.language || "javascript"}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+                                </motion.div>
+                            )}
+
+                            {/* Quiz Tab */}
+                            {hasMCQ && activeTab === 'quiz' && (
+                                <motion.div
+                                    key="quiz"
+                                    variants={pageVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute inset-0 flex flex-col"
+                                >
+                                    <TabsContent value="quiz" className="flex-1 m-0 h-full">
+                                        <QuizComponent
+                                            questions={session.mcqResponses.map((r: any) => r.question)}
+                                            onSubmit={handleQuizSubmit}
+                                            readonly={quizSubmitted}
+                                            answers={quizAnswers}
+                                            onAnswerSelect={(qId, aIdx) => {
+                                                setQuizAnswers(prev => ({ ...prev, [qId]: aIdx }));
+                                            }}
+                                        />
+                                    </TabsContent>
+                                </motion.div>
+                            )}
+
+                            {/* Browser Tab */}
+                            {activeTab === 'browser' && (
+                                <motion.div
+                                    key="browser"
+                                    variants={pageVariants}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    transition={{ duration: 0.1 }}
+                                    className="absolute inset-0 flex flex-col"
+                                >
+                                    <TabsContent value="browser" className="flex-1 m-0 h-full flex flex-col p-4 bg-muted/10">
+                                        <div className="mb-2 text-sm text-muted-foreground flex items-center gap-2">
+                                            <Globe className="w-4 h-4" />
+                                            <span>Allowed resources for this assessment. URL bar is disabled.</span>
+                                        </div>
+                                        <div className="flex-1 border rounded-lg overflow-hidden shadow-sm bg-white">
+                                            <BrowserMock initialUrl="https://www.w3schools.com" />
+                                        </div>
+                                    </TabsContent>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </Tabs>
             </div>
         </div>

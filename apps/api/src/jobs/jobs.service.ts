@@ -4,10 +4,13 @@ import { CreateJobDto, UpdateJobDto } from './dto/job.dto';
 import { JobStatus, CompanyVerificationStatus } from '@prisma/client';
 
 
+import { AiService } from '../ai/ai.service';
+
 @Injectable()
 export class JobsService {
     constructor(
-        private prisma: PrismaService
+        private prisma: PrismaService,
+        private aiService: AiService
     ) { }
 
     async create(userId: string, createJobDto: CreateJobDto) {
@@ -96,6 +99,7 @@ export class JobsService {
                         website: true,
                         industry: true,
                         companySize: true,
+                        userId: true, // Needed for permission checks too
                     },
                 },
                 _count: {
@@ -103,6 +107,8 @@ export class JobsService {
                         applications: true,
                     },
                 },
+                mcqQuestions: true,
+                codingProblems: true,
             },
         });
 
@@ -153,6 +159,70 @@ export class JobsService {
             orderBy: {
                 createdAt: 'desc',
             },
+        });
+    }
+
+    async generateQuestionsForJob(userId: string, jobId: string) {
+        const job = await this.prisma.job.findUnique({
+            where: { id: jobId },
+            include: { company: true }
+        });
+
+        if (!job) throw new NotFoundException('Job not found');
+        if (job.company.userId !== userId) throw new ForbiddenException('Unauthorized');
+
+        // Call AI Service
+        // Map requiredSkills (json) to string[]
+        const skills = Array.isArray(job.requiredSkills) ? (job.requiredSkills as string[]) : [];
+
+        return this.aiService.generateQuestions(job.title, skills, job.description);
+    }
+
+    async saveQuestionsForJob(userId: string, jobId: string, data: { mcqs: any[], coding: any[] }) {
+        // 1. Verify Job exists
+        // 1. Verify Job exists & Ownership
+        const job = await this.prisma.job.findUnique({
+            where: { id: jobId },
+            include: { company: true }
+        });
+
+        if (!job) throw new NotFoundException('Job not found');
+        if (job.company.userId !== userId) throw new ForbiddenException('Unauthorized');
+
+        // 2. Transact save
+        return this.prisma.$transaction(async (tx) => {
+            // Save MCQs
+            if (data.mcqs?.length) {
+                await tx.mCQQuestion.createMany({
+                    data: data.mcqs.map(q => ({
+                        jobId,
+                        question: q.question,
+                        options: q.options,
+                        correctAnswer: q.correctAnswer,
+                        explanation: q.explanation || '',
+                        difficulty: q.difficulty || 'MEDIUM',
+                        tags: q.tags || [],
+                    }))
+                });
+            }
+
+            // Save Coding Problems
+            if (data.coding?.length) {
+                for (const p of data.coding) {
+                    await tx.codingProblem.create({
+                        data: {
+                            jobId,
+                            title: p.title,
+                            description: p.description,
+                            difficulty: p.difficulty || 'MEDIUM',
+                            tags: p.tags || [],
+                            testCases: p.testCases || [],
+                            timeLimitMs: 1000,
+                            memoryLimitMB: 128
+                        }
+                    });
+                }
+            }
         });
     }
 }

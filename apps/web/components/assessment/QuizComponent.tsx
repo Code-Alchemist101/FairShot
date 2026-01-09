@@ -17,6 +17,13 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const questionVariants = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 }
+};
 
 interface MCQQuestion {
     id: string;
@@ -93,18 +100,18 @@ export function QuizComponent({
     }
 
     return (
-        <div className="flex flex-col h-full bg-slate-900 p-6">
+        <div className="flex flex-col h-full bg-background p-6">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-white">
+                    <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">
                         Question {currentIndex + 1} of {questions.length}
                     </h2>
                     <Badge className={`${difficultyColors[currentQuestion.difficulty as keyof typeof difficultyColors]} border`}>
                         {currentQuestion.difficulty}
                     </Badge>
                     {readonly && (
-                        <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20 border">
+                        <Badge variant="outline" className="border-blue-500/50 text-blue-500">
                             Review Mode
                         </Badge>
                     )}
@@ -113,7 +120,8 @@ export function QuizComponent({
                     {currentQuestion.tags.map((tag, index) => (
                         <Badge
                             key={index}
-                            className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 border"
+                            variant="secondary"
+                            className="text-xs"
                         >
                             {tag}
                         </Badge>
@@ -126,65 +134,75 @@ export function QuizComponent({
                 {questions.map((q, index) => (
                     <div
                         key={q.id}
-                        className={`h-2 flex-1 rounded-full ${answers[q.id] !== undefined
-                            ? 'bg-cyan-500'
+                        className={`h-2 flex-1 rounded-full transition-colors duration-300 ${answers[q.id] !== undefined
+                            ? 'bg-primary'
                             : index === currentIndex
-                                ? 'bg-slate-600'
-                                : 'bg-slate-700'
+                                ? 'bg-primary/50'
+                                : 'bg-muted'
                             }`}
                     />
                 ))}
             </div>
 
             {/* Question */}
-            <div className="flex-1 overflow-y-auto mb-6">
-                <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 mb-6">
-                    <p className="text-white text-lg leading-relaxed whitespace-pre-wrap">
-                        {currentQuestion.question}
-                    </p>
-                </div>
-
-                {/* Options */}
-                <RadioGroup
-                    key={currentQuestion.id}
-                    value={answers[currentQuestion.id]?.toString()}
-                    onValueChange={(value) => handleAnswerSelect(parseInt(value, 10))}
-                    className="space-y-3"
-                    disabled={readonly}
-                >
-                    {currentQuestion.options.map((option, index) => (
-                        <div
-                            key={index}
-                            className={`flex items-center space-x-3 p-4 rounded-lg border transition-all ${readonly ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
-                                } ${answers[currentQuestion.id] === index
-                                    ? 'bg-cyan-500/10 border-cyan-500/40'
-                                    : 'bg-slate-800/30 border-slate-700 hover:border-slate-600'
-                                }`}
-                        >
-                            <RadioGroupItem
-                                value={index.toString()}
-                                id={`option-${currentQuestion.id}-${index}`}
-                                className="border-slate-600 text-cyan-500"
-                                disabled={readonly}
-                            />
-                            <Label
-                                htmlFor={`option-${currentQuestion.id}-${index}`}
-                                className={`flex-1 text-white ${readonly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                            >
-                                {option}
-                            </Label>
+            <div className="flex-1 overflow-y-auto mb-6 relative">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={currentQuestion.id}
+                        variants={questionVariants}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={{ duration: 0.1 }}
+                    >
+                        <div className="bg-card border shadow-sm rounded-xl p-6 mb-6">
+                            <p className="text-lg leading-relaxed whitespace-pre-wrap font-medium">
+                                {currentQuestion.question}
+                            </p>
                         </div>
-                    ))}
-                </RadioGroup>
+
+                        {/* Options */}
+                        <RadioGroup
+                            value={answers[currentQuestion.id]?.toString()}
+                            onValueChange={(value) => handleAnswerSelect(parseInt(value, 10))}
+                            className="space-y-3"
+                            disabled={readonly}
+                        >
+                            {currentQuestion.options.map((option, index) => (
+                                <motion.div
+                                    key={index}
+                                    className={`flex items-center space-x-3 p-4 rounded-lg border transition-all ${readonly ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:bg-accent hover:border-accent'
+                                        } ${answers[currentQuestion.id] === index
+                                            ? 'bg-primary/10 border-primary ring-1 ring-primary'
+                                            : 'bg-card border-input'
+                                        }`}
+                                    onClick={() => handleAnswerSelect(index)}
+                                >
+                                    <RadioGroupItem
+                                        value={index.toString()}
+                                        id={`option-${currentQuestion.id}-${index}`}
+                                        className="text-primary pointer-events-none" // Make pointer events none to ensure parent click captures it
+                                        disabled={readonly}
+                                    />
+                                    <Label
+                                        htmlFor={`option-${currentQuestion.id}-${index}`}
+                                        className={`flex-1 ${readonly ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                    >
+                                        {option}
+                                    </Label>
+                                </motion.div>
+                            ))}
+                        </RadioGroup>
+                    </motion.div>
+                </AnimatePresence>
             </div>
 
             {/* Navigation */}
-            <div className="flex items-center justify-between pt-4 border-t border-slate-700">
+            <div className="flex items-center justify-between pt-4 border-t mt-auto">
                 <Button
                     variant="outline"
                     onClick={handlePrevious}
                     disabled={currentIndex === 0}
-                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
                 >
                     <ChevronLeft className="w-4 h-4 mr-2" />
                     Previous
@@ -194,13 +212,12 @@ export function QuizComponent({
                     {currentIndex < questions.length - 1 ? (
                         <Button
                             onClick={handleNext}
-                            className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600"
                         >
                             Next
                             <ChevronRight className="w-4 h-4 ml-2" />
                         </Button>
                     ) : readonly ? (
-                        <div className="text-slate-400 text-sm">
+                        <div className="text-muted-foreground text-sm flex items-center">
                             Quiz already submitted
                         </div>
                     ) : (
@@ -208,26 +225,26 @@ export function QuizComponent({
                             <AlertDialogTrigger asChild>
                                 <Button
                                     disabled={!allAnswered || submitting}
-                                    className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                                    className="bg-green-600 hover:bg-green-700 text-white"
                                 >
                                     <Send className="w-4 h-4 mr-2" />
                                     {submitting ? 'Submitting...' : 'Submit Quiz'}
                                 </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-slate-900 border-slate-700">
+                            <AlertDialogContent>
                                 <AlertDialogHeader>
-                                    <AlertDialogTitle className="text-white">Submit Quiz?</AlertDialogTitle>
-                                    <AlertDialogDescription className="text-slate-400">
+                                    <AlertDialogTitle>Submit Quiz?</AlertDialogTitle>
+                                    <AlertDialogDescription>
                                         Are you sure you want to submit your quiz? You won't be able to change your answers after submission.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                    <AlertDialogCancel className="bg-slate-800 text-white border-slate-700 hover:bg-slate-700">
+                                    <AlertDialogCancel>
                                         Review Answers
                                     </AlertDialogCancel>
                                     <AlertDialogAction
                                         onClick={handleSubmit}
-                                        className="bg-green-500 hover:bg-green-600 text-white"
+                                        className="bg-green-600 hover:bg-green-700"
                                     >
                                         Submit
                                     </AlertDialogAction>
@@ -240,7 +257,7 @@ export function QuizComponent({
 
             {/* Answer Status */}
             {!allAnswered && (
-                <p className="text-center text-slate-400 text-sm mt-4">
+                <p className="text-center text-muted-foreground text-sm mt-4">
                     {questions.filter(q => answers[q.id] !== undefined).length} of {questions.length} questions answered
                 </p>
             )}

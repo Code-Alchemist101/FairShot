@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
 
 interface ProctoringEvent {
     type: 'EYE_GAZE' | 'TAB_SWITCH' | 'MOUSE_MOVE' | 'FULLSCREEN_EXIT';
@@ -19,35 +18,38 @@ interface UseProctoringOptions {
 export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UseProctoringOptions) {
     const [isTracking, setIsTracking] = useState(false);
     const [warning, setWarning] = useState('');
-    const socketRef = useRef<Socket | null>(null);
-    const eventsRef = useRef<ProctoringEvent[]>([]);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const workerRef = useRef<Worker | null>(null);
 
     useEffect(() => {
         if (!enabled || typeof window === 'undefined') return;
 
-        // Initialize WebSocket
-        const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000';
-        socketRef.current = io(`${wsUrl}/proctoring`, {
-            transports: ['websocket'],
-        });
+        // Initialize Worker
+        if (!workerRef.current) {
+            workerRef.current = new Worker(new URL('../workers/proctoring.worker.ts', import.meta.url));
 
+            const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:4000';
+            workerRef.current.postMessage({
+                type: 'INIT_SESSION',
+                sessionId,
+                url: wsUrl
+            });
 
+            workerRef.current.onmessage = (e) => {
+                const { type, payload } = e.data;
+                if (type === 'WARNING') {
+                    setWarning(payload.message);
+                    setTimeout(() => setWarning(''), 5000);
+                } else if (type === 'TERMINATED') {
+                    alert(`Assessment Terminated: ${payload.reason}`);
+                    window.location.href = '/dashboard';
+                }
+            };
+        }
 
-        socketRef.current.on('proctoring-warning', (data: { message: string; riskScore: number }) => {
-            setWarning(data.message);
-            setTimeout(() => setWarning(''), 5000);
-        });
-
-        socketRef.current.on('session-terminated', (data: { reason: string }) => {
-            alert(`Assessment Terminated: ${data.reason}`);
-            window.location.href = '/dashboard';
-        });
-
-        // Initialize WebGazer (client-side only)
+        // Initialize WebGazer (client-side only behavior)
         const initWebGazer = async () => {
             try {
-                // Explicitly request camera permission first to ensure hardware light turns on
+                // Request camera (light check)
                 try {
                     await navigator.mediaDevices.getUserMedia({ video: true });
                 } catch (err) {
@@ -57,100 +59,81 @@ export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UsePr
                 }
 
                 const webgazer = (await import('webgazer')).default;
-                let lastGazeTime = 0;
 
+                // We keep the listener simple: just forward data to worker
                 await webgazer
                     .setGazeListener((data: any) => {
-                        const now = Date.now();
-                        // Throttle: capture only if 200ms (5 FPS) has passed
-                        if (data && now - lastGazeTime > 200) {
-                            lastGazeTime = now;
-                            eventsRef.current.push({
-                                type: 'EYE_GAZE',
-                                timestamp: now,
-                                x: data.x,
-                                y: data.y,
-                            });
-                        }
+                        if (data) {
+                            // Forward RAW data to worker for sampling
+                            if (workerRef.current) {
+                                workerRef.current.postMessage({
+                                    type: 'EVENT',
+                                    event: {
+                                        type: 'EYE_GAZE',
+                                        timestamp: Date.now(),
+                                        x: data.x,
+                                        y: data.y,
+                                    }
+                                });
+                            }
 
-                        // Real-time update for UI dot (runs every frame)
-                        if (onGazeUpdate && data) {
-                            onGazeUpdate(data.x, data.y);
+                            // UI Update (Visuals only, no logic)
+                            if (onGazeUpdate) onGazeUpdate(data.x, data.y);
                         }
                     })
                     .begin();
 
-                // Hide video preview and prediction points
                 webgazer.showVideoPreview(false);
                 webgazer.showPredictionPoints(false);
-
                 setIsTracking(true);
             } catch (error) {
                 console.error('Failed to initialize WebGazer:', error);
             }
         };
 
-        initWebGazer();
+        if (enabled) {
+            initWebGazer();
+        }
 
-        // Listen for tab switches
+        // Event Listeners for Worker
         const handleVisibilityChange = () => {
-            if (document.hidden) {
-                eventsRef.current.push({
-                    type: 'TAB_SWITCH',
-                    timestamp: Date.now(),
+            if (document.hidden && workerRef.current) {
+                workerRef.current.postMessage({
+                    type: 'EVENT',
+                    event: { type: 'TAB_SWITCH', timestamp: Date.now() }
+                });
+            }
+        };
+
+        const handleFullscreenChange = () => {
+            if (!document.fullscreenElement && workerRef.current) {
+                workerRef.current.postMessage({
+                    type: 'EVENT',
+                    event: { type: 'FULLSCREEN_EXIT', timestamp: Date.now() }
                 });
             }
         };
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
-
-        // Listen for fullscreen exits
-        const handleFullscreenChange = () => {
-            if (!document.fullscreenElement) {
-                eventsRef.current.push({
-                    type: 'FULLSCREEN_EXIT',
-                    timestamp: Date.now(),
-                });
-            }
-        };
-
         document.addEventListener('fullscreenchange', handleFullscreenChange);
 
-        // Send batch every 5 seconds
-        intervalRef.current = setInterval(() => {
-            if (eventsRef.current.length > 0 && socketRef.current) {
-                socketRef.current.emit('proctoring-batch', {
-                    sessionId,
-                    events: eventsRef.current,
-                });
-
-                eventsRef.current = [];
-            }
-        }, 5000);
-
-        // Cleanup
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
 
-            if (socketRef.current) {
-                socketRef.current.disconnect();
+            // Cleanup Worker
+            if (workerRef.current) {
+                workerRef.current.postMessage({ type: 'STOP' });
+                workerRef.current.terminate();
+                workerRef.current = null;
             }
 
-            // Stop WebGazer safely
+            // Cleanup WebGazer
             if (typeof window !== 'undefined') {
                 import('webgazer').then((module) => {
                     try {
-                        if (module.default && typeof module.default.end === 'function') {
-                            module.default.end();
-                        }
-                    } catch (error) {
-                        console.debug('WebGazer cleanup skipped:', error);
-                    }
+                        if (module.default?.end) module.default.end();
+                    } catch (e) { /* ignore */ }
                 }).catch(() => { });
             }
         };
@@ -163,7 +146,7 @@ export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UsePr
         calibratePoint: async (x: number, y: number) => {
             if (typeof window !== 'undefined') {
                 const webgazer = (await import('webgazer')).default;
-                webgazer.recordScreenPosition(x, y, 'click'); // Train the model
+                webgazer.recordScreenPosition(x, y, 'click');
             }
         }
     };

@@ -153,8 +153,8 @@ npx prisma generate
 
 ## Documentation
 
-- [Tech Stack](./TECH_STACK.md) - Detailed technology decisions
-- [Architecture](./ARCHITECTURE.md) - System design and data flows
+- [Tech Stack](./docs/TECH_STACK.md) - Detailed technology decisions
+- [Architecture](./docs/ARCHITECTURE.md) - System design and data flows
 - [Database Schema](./apps/api/prisma/schema.prisma) - Complete data model
 - [Implementation Plan](./docs/implementation_plan.md) - Development roadmap
 

@@ -42,7 +42,7 @@ export default function JobDetailsPage() {
                 setApplicationStatus(response.data);
             } catch (error) {
                 // Ignore 401/403 if not logged in
-                console.log('User not logged in or check failed');
+                // User not logged in or check failed
             }
         };
 

@@ -55,6 +55,14 @@ export class AssessmentsService {
                         },
                     },
                 },
+                codeSubmissions: {
+                    include: {
+                        problem: true
+                    },
+                    orderBy: {
+                        submittedAt: 'asc'
+                    }
+                }
             },
         });
 
@@ -79,18 +87,62 @@ export class AssessmentsService {
             },
         });
 
+        // Update Application status to IN_PROGRESS
+        await this.prisma.application.update({
+            where: { id: applicationId },
+            data: { status: 'ASSESSMENT_IN_PROGRESS' },
+        });
+
         // Check if assessment includes MCQ module
         const assessmentConfig = application.job.assessmentConfig as any;
         if (assessmentConfig?.modules?.includes('MCQ')) {
-            // Fetch all question IDs
-            const allQuestions = await this.prisma.mCQQuestion.findMany({
-                select: { id: true },
+            // Logic to pick relevant questions
+            // Priority 1: Questions specifically linked to this Job (jobId)
+            // Priority 2: Questions matching Job's required skills/tags
+            // Priority 3: Random fallback
+
+            const jobSkills = [
+                ...(Array.isArray(application.job.requiredSkills) ? application.job.requiredSkills as string[] : []),
+                ...(Array.isArray(application.job.tags) ? application.job.tags as string[] : []),
+            ].map(s => s.toLowerCase());
+
+            // Fetch potential questions (Job-specific OR General pool)
+            const candidates = await this.prisma.mCQQuestion.findMany({
+                where: {
+                    OR: [
+                        { jobId: application.job.id },
+                        { jobId: null } // General pool
+                    ]
+                },
+                select: { id: true, tags: true, jobId: true }
             });
 
-            if (allQuestions.length > 0) {
-                // Shuffle and select 5 random questions
-                const shuffled = allQuestions.sort(() => 0.5 - Math.random());
-                const selectedIds = shuffled.slice(0, Math.min(5, allQuestions.length)).map(q => q.id);
+            if (candidates.length > 0) {
+                // Score candidates
+                const scored = candidates.map(q => {
+                    let score = 0;
+
+                    // Job Specific: Highest priority (Absolute Override)
+                    if (q.jobId === application.job.id) score += 10000;
+
+                    // Skill Match: +10 per match
+                    if (Array.isArray(q.tags)) {
+                        const qTags = (q.tags as string[]).map(t => t.toLowerCase());
+                        const matches = qTags.filter(t => jobSkills.includes(t)).length;
+                        score += matches * 10;
+                    }
+
+                    return { ...q, score, random: Math.random() };
+                });
+
+                // Sort: Score DESC, then Random
+                scored.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return b.random - a.random;
+                });
+
+                // Select top 5
+                const selectedIds = scored.slice(0, 5).map(q => q.id);
 
                 // Create MCQResponse records for selected questions
                 await Promise.all(
@@ -106,8 +158,79 @@ export class AssessmentsService {
             }
         }
 
-        // Fetch session with MCQ responses
-        const sessionWithMCQ = await this.prisma.assessmentSession.findUnique({
+
+
+        // Check if assessment includes CODING module
+        if (assessmentConfig?.modules?.includes('CODING')) {
+            // Logic to pick relevant questions
+            // Priority 1: Questions specifically linked to this Job (jobId)
+            // Priority 2: Questions matching Job's required skills/tags
+            // Priority 3: Random fallback
+
+            const jobSkills = [
+                ...(Array.isArray(application.job.requiredSkills) ? application.job.requiredSkills as string[] : []),
+                ...(Array.isArray(application.job.tags) ? application.job.tags as string[] : []),
+            ].map(s => s.toLowerCase());
+
+            // Fetch potential problems (Job-specific OR General pool)
+            const candidates = await this.prisma.codingProblem.findMany({
+                where: {
+                    OR: [
+                        { jobId: application.job.id },
+                        { jobId: null } // General pool
+                    ]
+                },
+                select: { id: true, tags: true, jobId: true, testCases: true }
+            });
+
+            if (candidates.length > 0) {
+                // Score candidates
+                const scored = candidates.map(p => {
+                    let score = 0;
+
+                    // Job Specific: Highest priority (Absolute Override)
+                    if (p.jobId === application.job.id) score += 10000;
+
+                    // Skill Match: +10 per match
+                    if (Array.isArray(p.tags)) {
+                        const pTags = (p.tags as string[]).map(t => t.toLowerCase());
+                        const matches = pTags.filter(t => jobSkills.includes(t)).length;
+                        score += matches * 10;
+                    }
+
+                    return { ...p, score, random: Math.random() };
+                });
+
+                // Sort: Score DESC, then Random
+                scored.sort((a, b) => {
+                    if (b.score !== a.score) return b.score - a.score;
+                    return b.random - a.random;
+                });
+
+                // Select top 2 (or config count)
+                const count = assessmentConfig.codingCount || 2;
+                const selectedProblems = scored.slice(0, count);
+
+                // Create CodeSubmission records (Assignments)
+                await Promise.all(
+                    selectedProblems.map(p =>
+                        this.prisma.codeSubmission.create({
+                            data: {
+                                sessionId: session.id,
+                                problemId: p.id,
+                                code: '// Write your solution here...',
+                                language: 'javascript', // Default
+                                testCasesTotal: Array.isArray(p.testCases) ? p.testCases.length : 0,
+                                status: 'QUEUED',
+                            },
+                        })
+                    )
+                );
+            }
+        }
+
+        // Fetch session with MCQ responses AND Code Submissions
+        const sessionWithAssignments = await this.prisma.assessmentSession.findUnique({
             where: { id: session.id },
             include: {
                 application: {
@@ -129,10 +252,19 @@ export class AssessmentsService {
                         },
                     },
                 },
+                // Include assigned coding problems
+                codeSubmissions: {
+                    include: {
+                        problem: true
+                    },
+                    orderBy: {
+                        submittedAt: 'asc' // Show in order assigned
+                    }
+                }
             },
         });
 
-        return sessionWithMCQ;
+        return sessionWithAssignments;
     }
 
     /**
@@ -366,6 +498,12 @@ export class AssessmentsService {
             },
         });
 
+        // Update Application status to COMPLETED
+        await this.prisma.application.update({
+            where: { id: session.applicationId },
+            data: { status: 'ASSESSMENT_COMPLETED' },
+        });
+
         // Trigger async grading/analysis
         await this.reportsService.generateReport(sessionId);
 
@@ -390,8 +528,11 @@ export class AssessmentsService {
                     },
                 },
                 codeSubmissions: {
+                    include: {
+                        problem: true,
+                    },
                     orderBy: {
-                        submittedAt: 'desc',
+                        submittedAt: 'asc', // Changed to ASC to keep assignment order stable
                     },
                 },
                 mcqResponses: {

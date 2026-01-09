@@ -13,7 +13,7 @@ export function GlobalProctoringCleanup() {
                 try {
                     // Check if webgazer is loaded globally
                     if ((window as any).webgazer) {
-                        console.log('🧹 Global Cleanup: Stopping background WebGazer instance...');
+                        // 🧹 Global Cleanup: Stopping background WebGazer instance...
                         (window as any).webgazer.end();
 
                         // Force remove the video container if it persists

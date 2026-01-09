@@ -10,6 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Search, Filter, X } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const container = {
+    hidden: { opacity: 0 },
+    show: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1
+        }
+    }
+};
+
+const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+};
 
 export function StudentView() {
     const { toast } = useToast();
@@ -212,17 +228,23 @@ export function StudentView() {
                         </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid gap-6 md:grid-cols-2">
+                    <motion.div
+                        variants={container}
+                        initial="hidden"
+                        animate="show"
+                        className="grid gap-6 md:grid-cols-2"
+                    >
                         {filteredJobs.map((job: any) => (
-                            <JobCard
-                                key={job.id}
-                                job={job}
-                                onApply={handleApply}
-                                isApplied={appliedJobIds.includes(job.id)}
-                                showApplyButton={true}
-                            />
+                            <motion.div key={job.id} variants={item}>
+                                <JobCard
+                                    job={job}
+                                    onApply={handleApply}
+                                    isApplied={appliedJobIds.includes(job.id)}
+                                    showApplyButton={true}
+                                />
+                            </motion.div>
                         ))}
-                    </div>
+                    </motion.div>
                 )}
             </TabsContent>
 
@@ -261,7 +283,7 @@ export function StudentView() {
                     </TabsContent>
                 </Tabs>
             </TabsContent>
-        </Tabs>
+        </Tabs >
     );
 }
 

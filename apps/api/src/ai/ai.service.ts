@@ -18,7 +18,7 @@ interface ResourcePackContent {
 export class AiService {
     private readonly logger = new Logger(AiService.name);
     private readonly apiKey: string;
-    private readonly apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+    private readonly apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent';
 
     constructor(private configService: ConfigService) {
         this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -171,6 +171,93 @@ Example format:
         };
     }
 
+    async generateQuestions(jobTitle: string, skills: string[], description: string): Promise<{ mcqs: any[], coding: any[] }> {
+        const prompt = `You are a technical hiring expert. Create assessment questions for a "${jobTitle}" role.
+        
+Context:
+- Skills: ${skills.join(', ')}
+- Job Description: ${description}
+
+Task:
+1. Generate 5 multiple-choice questions (MCQs) testing the specific skills above.
+2. Generate 1 coding problem relevant to the role (e.g. data structure, algorithm, or practical script).
+
+Output Format:
+Return a single JSON object with two keys: "mcqs" (array) and "coding" (array).
+
+MCQ Object Structure:
+{
+  "question": "string",
+  "options": ["string", "string", "string", "string"],
+  "correctAnswer": number (0-3 index of correct option),
+  "explanation": "string (why the answer is correct)",
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
+  "tags": ["string"] (skills tested)
+}
+
+Coding Problem Object Structure:
+{
+  "title": "string",
+  "description": "string (markdown allowed)",
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
+  "tags": ["string"],
+  "testCases": [
+    { "input": "string", "expectedOutput": "string" }
+  ]
+}
+
+IMPORTANT: Ensure strict JSON format. Do not include markdown formatting like \`\`\`json.`;
+
+        try {
+            const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.7 }
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                this.logger.error(`Gemini API Error: ${response.status} ${response.statusText} - ${errorText}`);
+                throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            const text = result.candidates[0]?.content?.parts[0]?.text || '';
+
+
+            let jsonText = text;
+            const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+            if (jsonMatch) jsonText = jsonMatch[1];
+
+            const parsed = JSON.parse(jsonText);
+
+            return {
+                mcqs: Array.isArray(parsed.mcqs) ? parsed.mcqs : [],
+                coding: Array.isArray(parsed.coding) ? parsed.coding : []
+            };
+
+        } catch (error) {
+            this.logger.error('Failed to generate questions', error);
+            // Fallback for demo stability
+            return {
+                mcqs: [
+                    {
+                        question: `What is a primary characteristic of ${skills[0] || 'modern software'}?`,
+                        options: ["Scalability", "Latency", "Throughput", "Redundancy"],
+                        correctAnswer: 0,
+                        explanation: "Scalability is often a key requirement.",
+                        difficulty: "EASY",
+                        tags: skills
+                    }
+                ],
+                coding: []
+            };
+        }
+    }
+
     async generateAssessmentFeedback(data: any): Promise<{ strengths: string; weaknesses: string; improvementTips: string; communicationClarity?: number }> {
         const prompt = `Analyze this candidate's assessment performance and provide constructive feedback.
         
@@ -200,7 +287,7 @@ Example format:
             if (!response.ok) throw new Error('Gemini API error');
 
             const result = await response.json();
-            const text = result.candidates[0]?.content?.parts[0]?.text;
+            const text = result.candidates[0]?.content?.parts[0]?.text || '';
 
             let jsonText = text;
             const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);

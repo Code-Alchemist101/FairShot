@@ -9,6 +9,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Users, Briefcase, CreditCard, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+
+const container = {
+    hidden: { opacity: 0 },
+    show: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.1
+        }
+    }
+};
+
+const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+};
 
 export function CompanyView() {
     const { user } = useAuth();
@@ -62,46 +78,57 @@ export function CompanyView() {
     return (
         <div className="space-y-8">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-                        <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{activeJobs.length}</div>
-                        <p className="text-xs text-muted-foreground">Currently live on the platform</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Applicants</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalApplicants}</div>
-                        <p className="text-xs text-muted-foreground">Across all jobs</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Credits Remaining</CardTitle>
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{credits}</div>
-                        <p className="text-xs text-muted-foreground mb-4">Credits used for new applications</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => router.push('/company/billing')}
-                        >
-                            Manage Credits
-                        </Button>
-                    </CardContent>
-                </Card>
-            </div>
+            <motion.div
+                variants={container}
+                initial="hidden"
+                animate="show"
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            >
+                <motion.div variants={item}>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
+                            <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{activeJobs.length}</div>
+                            <p className="text-xs text-muted-foreground">Currently live on the platform</p>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+                <motion.div variants={item}>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Total Applicants</CardTitle>
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{totalApplicants}</div>
+                            <p className="text-xs text-muted-foreground">Across all jobs</p>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+                <motion.div variants={item}>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Credits Remaining</CardTitle>
+                            <CreditCard className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">{credits}</div>
+                            <p className="text-xs text-muted-foreground mb-4">Credits used for new applications</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                onClick={() => router.push('/company/billing')}
+                            >
+                                Manage Credits
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+            </motion.div>
 
             {/* Jobs Tabs */}
             <div className="space-y-4">

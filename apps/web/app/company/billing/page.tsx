@@ -116,15 +116,15 @@ export default function BillingPage() {
             <Button
                 variant="ghost"
                 onClick={() => router.push('/dashboard')}
-                className="text-slate-400 hover:text-white pl-0"
+                className="text-muted-foreground hover:text-foreground pl-0"
             >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
             </Button>
 
             {/* Header */}
             <div>
-                <h1 className="text-4xl font-bold text-white mb-2">Billing & Credits</h1>
-                <p className="text-slate-400">
+                <h1 className="text-4xl font-bold text-foreground mb-2">Billing & Credits</h1>
+                <p className="text-muted-foreground">
                     Manage your credits and purchase more to post job listings
                 </p>
             </div>
@@ -135,8 +135,8 @@ export default function BillingPage() {
             {/* Pricing Section */}
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Purchase More Credits</h2>
-                    <p className="text-slate-400">
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Purchase More Credits</h2>
+                    <p className="text-muted-foreground">
                         Choose a package that fits your hiring needs
                     </p>
                 </div>
@@ -160,34 +160,34 @@ export default function BillingPage() {
 
             {/* Transaction History */}
             <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-white">Transaction History</h2>
-                <div className="rounded-md border border-slate-700 bg-slate-800/30 overflow-hidden">
+                <h2 className="text-2xl font-bold text-foreground">Transaction History</h2>
+                <div className="rounded-md border border-border bg-card overflow-hidden">
                     <Table>
-                        <TableHeader className="bg-slate-800/50">
-                            <TableRow className="border-slate-700 hover:bg-transparent">
-                                <TableHead className="text-slate-300">Date</TableHead>
-                                <TableHead className="text-slate-300">Description</TableHead>
-                                <TableHead className="text-slate-300">Amount</TableHead>
-                                <TableHead className="text-slate-300">Status</TableHead>
+                        <TableHeader className="bg-muted/50">
+                            <TableRow className="border-border hover:bg-transparent">
+                                <TableHead className="text-muted-foreground">Date</TableHead>
+                                <TableHead className="text-muted-foreground">Description</TableHead>
+                                <TableHead className="text-muted-foreground">Amount</TableHead>
+                                <TableHead className="text-muted-foreground">Status</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {transactions.length === 0 ? (
-                                <TableRow className="border-slate-700 hover:bg-transparent">
-                                    <TableCell colSpan={4} className="text-center py-8 text-slate-500">
+                                <TableRow className="border-border hover:bg-transparent">
+                                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                                         No purchase history found.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 transactions.map((tx: any) => (
-                                    <TableRow key={tx.id} className="border-slate-700 hover:bg-slate-800/50">
-                                        <TableCell className="text-slate-300">
+                                    <TableRow key={tx.id} className="border-border hover:bg-muted/50">
+                                        <TableCell className="text-foreground">
                                             {new Date(tx.createdAt).toLocaleDateString()}
                                         </TableCell>
-                                        <TableCell className="text-slate-300 font-medium">
+                                        <TableCell className="text-foreground font-medium">
                                             {tx.description}
                                         </TableCell>
-                                        <TableCell className="text-slate-300">
+                                        <TableCell className="text-foreground">
                                             {tx.currency} {tx.amount.toFixed(2)}
                                         </TableCell>
                                         <TableCell>
