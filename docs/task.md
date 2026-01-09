@@ -54,30 +54,22 @@
         - [x] **Feature**: Manual Question Entry (Company Side) <!-- id: 97 -->
         - [x] Verify end-to-end flow (Job Post -> AI Gen -> Student Exam) <!-- id: 31 -->
 
-# Phase 5: Production Hardening (Future Roadmap)
+# Phase 5: MVP Hardening & Integrity (Current Priority)
 
-- [ ] **Advanced Assessment Engine** <!-- id: 100 -->
-    - [ ] **Code Execution**: Implement real test case execution (Standard Output/Error checks) <!-- id: 101 -->
-    - [ ] **Reporting**: Sophisticated analysis of student performance & behavior <!-- id: 102 -->
-    - [ ] **Manual Entry**: Allow companies to provide custom code test cases <!-- id: 103 -->
+- [ ] **Assessment Integrity** <!-- id: 100 -->
+    - [ ] **Question Randomization**: Implement shuffling logic to select random subsets of questions per student <!-- id: 101 -->
+    - [ ] **Copy-Paste Detection**: Add event listeners to flag suspicious clipboard activity <!-- id: 102 -->
+    - [ ] **Server-Side Verify**: Capture and upload proctoring snapshots periodically for server-side persistence <!-- id: 103 -->
 
-- [ ] **Secure Browser Environment** <!-- id: 110 -->
-    - [ ] **Proxy Server**: Build custom proxy to allow HTTPS sites in iframe/panel <!-- id: 111 -->
-    - [ ] **Whitelisting**: Advanced URL filtering and access control <!-- id: 112 -->
+- [ ] **Advanced Assessment Engine** <!-- id: 110 -->
+    - [ ] **Real Code Execution**: Ensure code editor sends payload to Backend -> Judge0 for actual validation <!-- id: 111 -->
+    - [ ] **Result Parsing**: Parse Judge0 output to provide detailed pass/fail feedback per test case <!-- id: 112 -->
+    - [ ] **Manual Question Entry**: Fully verify the "Manual Entry" flow for companies <!-- id: 113 -->
 
-- [ ] **Scalability & Security** <!-- id: 120 -->
-    - [ ] Audit Proctring events storage (optimize for scale) <!-- id: 121 -->
-    - [ ] Secure API endpoints with stricter Rate Limiting <!-- id: 122 -->
+- [ ] **Analytics & Feedback** <!-- id: 120 -->
+    - [ ] **Granular Scoring**: Calculate categorical scores (e.g., Logic vs Syntax) <!-- id: 121 -->
+    - [ ] **Pre-Assessment**: Add "System Check" steps (Camera/Mic/Network) before exam starts <!-- id: 122 -->
 
-# Phase 6: UI/UX Redesign (Current Focus)
-
-- [x] **Design System Upgrade** <!-- id: 130 -->
-    - [x] **Colors & Typography**: Refine palette for modern, premium look <!-- id: 131 -->
-    - [x] **Animations**: Integrate `framer-motion` for smooth transitions <!-- id: 132 -->
-    - [x] **Components**: Polish buttons, cards, and inputs with micro-interactions <!-- id: 133 -->
-
-- [ ] **Key Page Revamps** <!-- id: 140 -->
-    - [x] **Landing Page**: High-impact hero section and feature showcase <!-- id: 141 -->
-    - [x] **Auth Pages**: Clean, welcoming login/signup experience <!-- id: 142 -->
-    - [x] **Dashboards**: Improved layout, spacing, and data visualization <!-- id: 143 -->
-    - [x] **Assessment Interface**: Focus mode, distraction-free UI <!-- id: 144 -->
+- [ ] **Company Side Enhancements** <!-- id: 130 -->
+    - [ ] **Billing Integration**: Charge credits on "Assessment Start" (or verify current logic) <!-- id: 131 -->
+    - [ ] **Refund Logic**: Implement "Return Credit" if student doesn't start exam <!-- id: 132 -->
