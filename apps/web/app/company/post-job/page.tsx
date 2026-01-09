@@ -112,7 +112,7 @@ export default function PostJobPage() {
                     <p className="text-muted-foreground">Create a job listing and configure the assessment.</p>
                 </div>
 
-                <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
+                <form onSubmit={(e) => handleSubmit(e, 'ACTIVE')} className="space-y-8">
                     <Card>
                         <CardHeader>
                             <CardTitle>Job Details</CardTitle>
