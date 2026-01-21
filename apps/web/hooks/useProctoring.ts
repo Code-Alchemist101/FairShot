@@ -83,7 +83,7 @@ export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UsePr
                     })
                     .begin();
 
-                webgazer.showVideoPreview(false);
+                webgazer.showVideoPreview(true);
                 webgazer.showPredictionPoints(false);
                 setIsTracking(true);
             } catch (error) {
@@ -97,11 +97,17 @@ export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UsePr
 
         // Event Listeners for Worker
         const handleVisibilityChange = () => {
-            if (document.hidden && workerRef.current) {
-                workerRef.current.postMessage({
-                    type: 'EVENT',
-                    event: { type: 'TAB_SWITCH', timestamp: Date.now() }
-                });
+            if (document.hidden) {
+                // Immediate feedback
+                setWarning('⚠️ Tab Switch Detected! This incident has been logged.');
+
+                // Send to worker
+                if (workerRef.current) {
+                    workerRef.current.postMessage({
+                        type: 'EVENT',
+                        event: { type: 'TAB_SWITCH', timestamp: Date.now() }
+                    });
+                }
             }
         };
 
@@ -138,6 +144,14 @@ export function useProctoring({ sessionId, enabled = true, onGazeUpdate }: UsePr
             }
         };
     }, [sessionId, enabled]);
+
+    // Auto-clear local warnings
+    useEffect(() => {
+        if (warning) {
+            const timer = setTimeout(() => setWarning(''), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [warning]);
 
     return {
         isTracking,

@@ -70,6 +70,10 @@ export class AssessmentsService {
             return existingSession; // Return existing session with MCQ responses
         }
 
+        // Check if assessment includes MCQ module
+        const assessmentConfig = application.job.assessmentConfig as any;
+        const durationMinutes = assessmentConfig?.timeLimit ? Number(assessmentConfig.timeLimit) : 60;
+
         // Create new session
         const session = await this.prisma.assessmentSession.create({
             data: {
@@ -77,6 +81,7 @@ export class AssessmentsService {
                 studentId: application.studentId,
                 status: AssessmentStatus.IN_PROGRESS,
                 startTime: new Date(),
+                durationMinutes,
             },
             include: {
                 application: {
@@ -94,7 +99,7 @@ export class AssessmentsService {
         });
 
         // Check if assessment includes MCQ module
-        const assessmentConfig = application.job.assessmentConfig as any;
+
         if (assessmentConfig?.modules?.includes('MCQ')) {
             // Logic to pick relevant questions
             // Priority 1: Questions specifically linked to this Job (jobId)
@@ -300,30 +305,85 @@ export class AssessmentsService {
         // Get language ID
         const languageId = this.judge0Service.getLanguageId(language);
 
-        // Submit to Judge0
-        const result = await this.judge0Service.executeAndWait(code, languageId, stdin);
-
-        // Determine status based on Judge0 result
-        let status: CodeSubmissionStatus;
-        if (result.status.id === 3) {
-            status = CodeSubmissionStatus.COMPLETED;
-        } else if (result.status.id === 5) {
-            status = CodeSubmissionStatus.TIME_LIMIT_EXCEEDED;
-        } else if (result.status.id === 6) {
-            status = CodeSubmissionStatus.ERROR;
-        } else {
-            status = CodeSubmissionStatus.ERROR;
-        }
-
-        // Get problem to determine test cases (optional for testing)
+        // Fetch Problem & Test Cases
         let problem = null;
-        let testCasesTotal = 1;
+        let testCases: any[] = [];
 
         if (problemId) {
             problem = await this.prisma.codingProblem.findUnique({
                 where: { id: problemId },
+                select: { id: true, testCases: true, title: true }
             });
-            testCasesTotal = problem?.testCases ? (problem.testCases as any[]).length : 1;
+
+            if (problem && Array.isArray(problem.testCases)) {
+                // Safely cast JsonValue to any[]
+                testCases = problem.testCases as unknown as any[];
+            }
+        }
+
+        let finalResult: any = {};
+        let passedCases = 0;
+        let totalCases = testCases.length;
+        let finalStatus: CodeSubmissionStatus = CodeSubmissionStatus.QUEUED;
+
+        // --- SCENARIO A: Run against Test Cases ---
+        if (totalCases > 0) {
+            const results = await Promise.all(testCases.map(async (tc) => {
+                try {
+                    const res = await this.judge0Service.executeAndWait(code, languageId, tc.input);
+
+                    // Normalize outputs (trim whitespace)
+                    const actual = (res.stdout || '').trim();
+                    const expected = (tc.expectedOutput || tc.output || '').trim();
+
+                    const passed = actual === expected;
+                    if (passed) passedCases++;
+
+                    return { ...res, passed, expected };
+                } catch (err) {
+                    return {
+                        stdout: null,
+                        stderr: err.message,
+                        compile_output: null,
+                        time: 0,
+                        memory: 0,
+                        status: { id: 6, description: 'Error' },
+                        passed: false,
+                        expected: ''
+                    };
+                }
+            }));
+
+            // Determine Status
+            const allPassed = passedCases === totalCases;
+            finalStatus = allPassed ? CodeSubmissionStatus.COMPLETED : CodeSubmissionStatus.ERROR;
+
+            // For the UI "output", show the first failed case or the first success
+            const firstFailure = results.find(r => !r.passed);
+            const displayResult = firstFailure || results[0];
+
+            if (displayResult) {
+                finalResult = {
+                    status: { id: allPassed ? 3 : 4, description: allPassed ? 'Accepted' : `Wrong Answer (${passedCases}/${totalCases})` },
+                    stdout: displayResult.stdout,
+                    stderr: displayResult.stderr || (firstFailure ? `Expected: ${firstFailure.expected}\nGot: ${firstFailure.stdout}` : ''),
+                    compile_output: displayResult.compile_output || null,
+                    time: displayResult.time,
+                    memory: displayResult.memory,
+                };
+            }
+
+        } else {
+            // --- SCENARIO B: Single Run (No Test Cases / Playground) ---
+            const res = await this.judge0Service.executeAndWait(code, languageId, stdin || '');
+
+            if (res.status.id === 3) finalStatus = CodeSubmissionStatus.COMPLETED;
+            else if (res.status.id >= 5) finalStatus = CodeSubmissionStatus.ERROR;
+            else finalStatus = CodeSubmissionStatus.ERROR;
+
+            finalResult = res;
+            totalCases = 1;
+            passedCases = finalStatus === CodeSubmissionStatus.COMPLETED ? 1 : 0;
         }
 
         // Save submission
@@ -333,25 +393,26 @@ export class AssessmentsService {
                 problemId: problemId || null,
                 code,
                 language,
-                status,
-                stdout: result.stdout || null,
-                stderr: result.stderr || null,
-                compileOutput: result.compile_output || null,
-                executionTimeMs: result.time ? Math.round(parseFloat(result.time) * 1000) : null,
-                memoryUsedKB: result.memory || null,
-                testCasesTotal,
-                testCasesPassed: status === CodeSubmissionStatus.COMPLETED ? testCasesTotal : 0,
+                status: finalStatus,
+                stdout: finalResult.stdout || null,
+                stderr: finalResult.stderr || null,
+                compileOutput: finalResult.compile_output || null,
+                executionTimeMs: finalResult.time ? Math.round(parseFloat(finalResult.time) * 1000) : null,
+                memoryUsedKB: finalResult.memory || null,
+                testCasesTotal: totalCases,
+                testCasesPassed: passedCases,
             },
         });
 
         return {
             submission,
             result: {
-                status: result.status.description,
-                output: result.stdout,
-                error: result.stderr || result.compile_output,
-                time: result.time,
-                memory: result.memory,
+                status: finalResult.status.description,
+                output: finalResult.stdout,
+                error: finalResult.stderr || finalResult.compile_output,
+                time: finalResult.time,
+                memory: finalResult.memory,
+                testCases: { passed: passedCases, total: totalCases }
             },
         };
     }

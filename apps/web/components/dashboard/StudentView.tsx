@@ -312,7 +312,7 @@ function ApplicationList({ applications, emptyMessage }: { applications: any[], 
                             </div>
                             <div className="text-right">
                                 <div className="text-sm font-medium text-muted-foreground">Status</div>
-                                <Badge variant={application.status === 'ASSESSMENT_PENDING' ? 'destructive' : 'secondary'}>
+                                <Badge variant={['ASSESSMENT_PENDING', 'REJECTED', 'TERMINATED'].includes(application.status) ? 'destructive' : 'secondary'}>
                                     {application.status.replace(/_/g, ' ')}
                                 </Badge>
                             </div>

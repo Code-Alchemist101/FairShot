@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AssessmentTimer } from '@/components/assessment/AssessmentTimer';
 import { useToast } from '@/hooks/use-toast';
 import { Play, Clock, Loader2, FileCode, Globe, ClipboardList } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -30,7 +31,7 @@ export default function AssessmentPage() {
     const [session, setSession] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [code, setCode] = useState('// Write your code here\n');
-    const [timeRemaining, setTimeRemaining] = useState(3600);
+    // const [timeRemaining, setTimeRemaining] = useState(3600); // MOVED TO COMPONENT
     const [submitting, setSubmitting] = useState(false);
     const [result, setResult] = useState<any>(null);
     const [quizSubmitted, setQuizSubmitted] = useState(false);
@@ -84,6 +85,12 @@ export default function AssessmentPage() {
                 setActiveTab('quiz');
             }
 
+            // Initialize code immediately
+            const activeSub = response.data.codeSubmissions?.[0];
+            if (activeSub?.code) {
+                setCode(activeSub.code);
+            }
+
             setLoading(false);
         } catch (error) {
             console.error('Failed to fetch session:', error);
@@ -96,38 +103,7 @@ export default function AssessmentPage() {
         }
     };
 
-    // Timer Logic
-    useEffect(() => {
-        if (!session || !session.startTime) return;
-
-        const calculateTimeLeft = () => {
-            const startTime = new Date(session.startTime).getTime();
-            const durationMs = (session.durationMinutes || 60) * 60 * 1000;
-            const endTime = startTime + durationMs;
-            const now = Date.now();
-            const diff = Math.floor((endTime - now) / 1000);
-            return Math.max(0, diff);
-        };
-
-        // Initialize timer
-        setTimeRemaining(calculateTimeLeft());
-
-        // Don't start countdown until calibration passed
-        if (!isCalibrated) return;
-
-        const interval = setInterval(() => {
-            const left = calculateTimeLeft();
-            setTimeRemaining(left);
-
-            // Auto-submit if time runs out
-            if (left <= 0 && !submitting) {
-                handleFinishTest();
-                clearInterval(interval);
-            }
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [session, isCalibrated, submitting]);
+    // Timer Logic - MOVED TO AssessmentTimer COMPONENT
 
     // Hide webgazer UI
     useEffect(() => {
@@ -147,15 +123,65 @@ export default function AssessmentPage() {
         };
     }, []);
 
+    // Strict Anti-Cheating: Disable Right-Click, Copy, Cut, Paste
+    useEffect(() => {
+        const handleContextMenu = (e: MouseEvent) => {
+            e.preventDefault();
+            toast({
+                title: 'Action Prohibited',
+                description: 'Right-click is disabled during the assessment.',
+                variant: 'destructive',
+                duration: 2000
+            });
+        };
+
+        const handleCopyCutPaste = (e: ClipboardEvent) => {
+            e.preventDefault();
+            toast({
+                title: 'Action Prohibited',
+                description: 'Copy/Paste is disabled during the assessment.',
+                variant: 'destructive',
+                duration: 2000
+            });
+        };
+
+        const handleKeys = (e: KeyboardEvent) => {
+            // Block Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+Shift+I (DevTools)
+            if (
+                (e.ctrlKey && ['c', 'v', 'x', 'a', 'u', 'i'].includes(e.key.toLowerCase())) ||
+                (e.metaKey && ['c', 'v', 'x', 'a', 'u', 'i'].includes(e.key.toLowerCase())) ||
+                e.key === 'F12'
+            ) {
+                e.preventDefault();
+                toast({
+                    title: 'Action Prohibited',
+                    description: 'Keyboard shortcuts are disabled.',
+                    variant: 'destructive',
+                    duration: 2000
+                });
+            }
+        };
+
+        document.addEventListener('contextmenu', handleContextMenu);
+        document.addEventListener('copy', handleCopyCutPaste);
+        document.addEventListener('cut', handleCopyCutPaste);
+        document.addEventListener('paste', handleCopyCutPaste);
+        document.addEventListener('keydown', handleKeys);
+
+        return () => {
+            document.removeEventListener('contextmenu', handleContextMenu);
+            document.removeEventListener('copy', handleCopyCutPaste);
+            document.removeEventListener('cut', handleCopyCutPaste);
+            document.removeEventListener('paste', handleCopyCutPaste);
+            document.removeEventListener('keydown', handleKeys);
+        };
+    }, []);
+
     const activeProblem = session?.codeSubmissions?.[0]?.problem;
     const activeSubmission = session?.codeSubmissions?.[0];
 
     // Initialize code from saved submission
-    useEffect(() => {
-        if (activeSubmission?.code) {
-            setCode(activeSubmission.code);
-        }
-    }, [activeSubmission]);
+    // Initialize code from saved submission - REMOVED (Handled in fetchSession)
 
     const handleRunCode = async () => {
         setSubmitting(true);
@@ -164,9 +190,9 @@ export default function AssessmentPage() {
         try {
             const response = await api.post('/assessments/submit', {
                 sessionId,
-                problemId: null,
+                problemId: activeProblem?.id || null,
                 code,
-                language: 'javascript',
+                language: 'javascript', // Should ideally come from activeSubmission.language
             });
 
             setResult(response.data.result);
@@ -250,7 +276,7 @@ export default function AssessmentPage() {
             });
 
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                window.location.href = '/assessment/thank-you';
             }, 1500);
         } catch (error) {
             console.error('Failed to finish test:', error);
@@ -262,11 +288,7 @@ export default function AssessmentPage() {
         }
     };
 
-    const formatTime = (seconds: number): string => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
+
 
     if (loading) {
         return (
@@ -308,10 +330,13 @@ export default function AssessmentPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-md border">
-                        <Clock className="w-4 h-4" />
-                        <span className="font-mono text-lg font-medium text-foreground">{formatTime(timeRemaining)}</span>
-                    </div>
+                    <AssessmentTimer
+                        startTime={session?.startTime}
+                        durationMinutes={session?.durationMinutes}
+                        isCalibrated={isCalibrated}
+                        submitting={submitting}
+                        onTimeExpire={handleFinishTest}
+                    />
 
                     {hasCoding && (
                         <Button onClick={handleRunCode} disabled={submitting} variant="secondary" className="mr-2">
@@ -439,7 +464,7 @@ export default function AssessmentPage() {
                                             <div className="col-span-8 h-full flex flex-col bg-[#1e1e1e]">
                                                 <div className="h-full">
                                                     <CodeEditor
-                                                        code={code}
+                                                        defaultValue={code}
                                                         onChange={(value) => setCode(value || '')}
                                                         language={activeSubmission?.language || "javascript"}
                                                     />

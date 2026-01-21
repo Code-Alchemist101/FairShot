@@ -19,7 +19,7 @@ import { PaymentsModule } from './payments/payments.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: 'apps/api/.env',
+      envFilePath: ['.env', 'apps/api/.env'],
     }),
     PrismaModule,
     AiModule,

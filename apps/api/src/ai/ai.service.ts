@@ -24,90 +24,57 @@ export class AiService {
         this.apiKey = this.configService.get<string>('GEMINI_API_KEY');
     }
 
+    private cleanAndParseJson(text: string): any {
+        // 1. Remove Markdown code blocks
+        let cleanText = text.replace(/```json/g, '').replace(/```/g, '');
+
+        // 2. Find the JSON object (first '{' to last '}')
+        const firstOpen = cleanText.indexOf('{');
+        const lastClose = cleanText.lastIndexOf('}');
+
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+            cleanText = cleanText.substring(firstOpen, lastClose + 1);
+        }
+
+        // 3. Remove potential bad control characters (newlines in strings are common issues)
+        // This is a naive cleanup; strictly speaking, we rely on the AI to be better, 
+        // but stripping non-printable chars can help.
+        // cleanText = cleanText.replace(/[\x00-\x1F\x7F-\x9F]/g, ""); 
+        // WARNING: The above strips \n which we need. JSON.parse handles \n if escaped \\n.
+        // If the LLM returns literal newlines inside a string, JSON.parse fails.
+        // We can try to escape unescaped newlines? Too risky for complex nested JSON.
+
+        try {
+            return JSON.parse(cleanText);
+        } catch (error) {
+            this.logger.error(`JSON Parse Failed. Text snippet: ${cleanText.substring(0, 200)}...`);
+            throw error;
+        }
+    }
+
     async generateResourcePack(params: GenerateResourcePackParams): Promise<ResourcePackContent> {
         const { jobTitle, skills, description } = params;
 
-        const prompt = `You are an expert career coach creating a study guide for a job applicant.
-
+        const prompt = `You are an expert career coach creating a study guide.
 Job Title: ${jobTitle}
-Required Skills: ${skills.join(', ')}
-Job Description: ${description}
+Skills: ${skills.join(', ')}
+Context: ${description}
 
-Create a comprehensive study plan with the following sections:
+Output strict JSON (NO MARKDOWN) with keys:
+examPattern (string)
+requiredSkills (array of strings)
+prepTips (array of strings)
+sampleQuestions (array of objects: {type, question, options, answer, explanation, difficulty})
 
-1. EXAM PATTERN: Describe what the assessment will likely include (e.g., "You'll face 20 MCQs on ${skills[0]}, 2 coding problems, and 1 system design question"). Be specific and realistic. Return as a single string.
-
-2. REQUIRED SKILLS: List the top 5 skills the candidate must master, with a brief explanation of why each is important for this role. Return as an array of strings, where each string is "Skill Name: Explanation".
-
-3. PREPARATION TIPS: Provide 5 actionable tips for preparing for this assessment. Focus on real-world practice, not just theory. Return as an array of strings.
-
-4. SAMPLE QUESTIONS: Create 3 sample questions (mix of MCQ and coding). Return as an array of objects with:
-   - 'type': "MCQ" or "CODING"
-   - 'question': The question text
-   - 'options': Array of strings (for MCQ only)
-   - 'answer': The correct answer string (for MCQ) or a brief solution description (for CODING)
-   - 'explanation': Brief explanation of why the answer is correct or key concepts involved.
-   - 'difficulty': "Easy", "Medium", or "Hard"
-
-Format your response as JSON with keys: examPattern (string), requiredSkills (array of strings), prepTips (array of strings), sampleQuestions (array of objects).
-
-Example format:
-{
-  "examPattern": "You'll face 15 MCQs on JavaScript fundamentals, 2 React coding challenges, and 1 system design question about scalable architectures.",
-  "requiredSkills": [
-    "JavaScript ES6+: Essential for modern React development and async operations",
-    "React Hooks: Core to building functional components and managing state",
-    "Node.js: Required for backend API development and server-side logic",
-    "PostgreSQL: Database design and query optimization skills are critical",
-    "System Design: Ability to architect scalable, maintainable applications"
-  ],
-  "prepTips": [
-    "Practice building full-stack applications with React and Node.js",
-    "Review JavaScript async/await patterns and Promise handling",
-    "Study common system design patterns like MVC and microservices",
-    "Solve coding problems on LeetCode focusing on data structures",
-    "Build a portfolio project demonstrating all required skills"
-  ],
-  "sampleQuestions": [
-    {
-      "type": "MCQ",
-      "question": "What is the purpose of useEffect hook in React?",
-      "options": ["State management", "Side effects handling", "Component rendering", "Event handling"],
-      "answer": "Side effects handling",
-      "explanation": "useEffect is designed to perform side effects in function components, such as data fetching or subscriptions.",
-      "difficulty": "Easy"
-    },
-    {
-      "type": "CODING",
-      "question": "Implement a function to debounce API calls in a search input",
-      "difficulty": "Medium",
-      "answer": "Use a timer to delay execution until the user stops typing for a set duration.",
-      "explanation": "Debouncing prevents excessive API calls by ensuring the function only fires after a pause in events."
-    }
-  ]
-}`;
+Ensure strings are properly escaped.`;
 
         try {
             const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [
-                        {
-                            role: "user",
-                            parts: [
-                                {
-                                    text: prompt,
-                                },
-                            ],
-                        },
-                    ],
-                    generationConfig: {
-                        temperature: 0.7,
-                        maxOutputTokens: 2048,
-                    },
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.7 }
                 }),
             });
 
@@ -122,15 +89,7 @@ Example format:
                 throw new Error('No content generated from Gemini');
             }
 
-            // Try to parse JSON from the response
-            // Gemini sometimes wraps JSON in markdown code blocks
-            let jsonText = generatedText;
-            const jsonMatch = generatedText.match(/```json\n([\s\S]*?)\n```/);
-            if (jsonMatch) {
-                jsonText = jsonMatch[1];
-            }
-
-            const parsed = JSON.parse(jsonText);
+            const parsed = this.cleanAndParseJson(generatedText);
 
             return {
                 examPattern: parsed.examPattern || 'Assessment details will be provided.',
@@ -143,22 +102,10 @@ Example format:
 
             // Return fallback content if AI fails (now as arrays)
             return {
-                examPattern: `You'll face a comprehensive assessment for the ${jobTitle} role, including technical questions and practical challenges.`,
-                requiredSkills: skills.map(skill => `${skill}: Essential skill for this role`),
-                prepTips: [
-                    `Review ${skills[0]} fundamentals and best practices`,
-                    'Practice coding problems on platforms like LeetCode',
-                    'Study system design patterns and architectures',
-                    'Review the job description carefully and align your preparation',
-                    'Prepare thoughtful questions for the interviewer'
-                ],
-                sampleQuestions: [
-                    {
-                        type: 'MCQ',
-                        question: `What is a key concept in ${skills[0]}?`,
-                        options: ['Option A', 'Option B', 'Option C', 'Option D'],
-                    },
-                ],
+                examPattern: `Assessment for ${jobTitle}`,
+                requiredSkills: skills,
+                prepTips: ['Study hard', 'Rest well'],
+                sampleQuestions: []
             };
         }
     }
@@ -172,41 +119,17 @@ Example format:
     }
 
     async generateQuestions(jobTitle: string, skills: string[], description: string): Promise<{ mcqs: any[], coding: any[] }> {
-        const prompt = `You are a technical hiring expert. Create assessment questions for a "${jobTitle}" role.
-        
-Context:
-- Skills: ${skills.join(', ')}
-- Job Description: ${description}
+        const prompt = `Create assessment questions for "${jobTitle}".
+Skills: ${skills.join(', ')}
 
-Task:
-1. Generate 5 multiple-choice questions (MCQs) testing the specific skills above.
-2. Generate 1 coding problem relevant to the role (e.g. data structure, algorithm, or practical script).
+Return a JSON object with:
+"mcqs" (array of 5 objects): {question, options[], correctAnswer(0-3), explanation, difficulty, tags[]}
+"coding" (array of 1 object): {title, description, testCases:[{input, expectedOutput}]}
 
-Output Format:
-Return a single JSON object with two keys: "mcqs" (array) and "coding" (array).
-
-MCQ Object Structure:
-{
-  "question": "string",
-  "options": ["string", "string", "string", "string"],
-  "correctAnswer": number (0-3 index of correct option),
-  "explanation": "string (why the answer is correct)",
-  "difficulty": "EASY" | "MEDIUM" | "HARD",
-  "tags": ["string"] (skills tested)
-}
-
-Coding Problem Object Structure:
-{
-  "title": "string",
-  "description": "string (markdown allowed)",
-  "difficulty": "EASY" | "MEDIUM" | "HARD",
-  "tags": ["string"],
-  "testCases": [
-    { "input": "string", "expectedOutput": "string" }
-  ]
-}
-
-IMPORTANT: Ensure strict JSON format. Do not include markdown formatting like \`\`\`json.`;
+IMPORTANT:
+1. Return purely JSON. No markdown backticks.
+2. Escape all special characters in strings (e.g., use \\n for newlines, \\" for quotes).
+`;
 
         try {
             const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
@@ -227,12 +150,7 @@ IMPORTANT: Ensure strict JSON format. Do not include markdown formatting like \`
             const result = await response.json();
             const text = result.candidates[0]?.content?.parts[0]?.text || '';
 
-
-            let jsonText = text;
-            const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-            if (jsonMatch) jsonText = jsonMatch[1];
-
-            const parsed = JSON.parse(jsonText);
+            const parsed = this.cleanAndParseJson(text);
 
             return {
                 mcqs: Array.isArray(parsed.mcqs) ? parsed.mcqs : [],
@@ -241,38 +159,14 @@ IMPORTANT: Ensure strict JSON format. Do not include markdown formatting like \`
 
         } catch (error) {
             this.logger.error('Failed to generate questions', error);
-            // Fallback for demo stability
-            return {
-                mcqs: [
-                    {
-                        question: `What is a primary characteristic of ${skills[0] || 'modern software'}?`,
-                        options: ["Scalability", "Latency", "Throughput", "Redundancy"],
-                        correctAnswer: 0,
-                        explanation: "Scalability is often a key requirement.",
-                        difficulty: "EASY",
-                        tags: skills
-                    }
-                ],
-                coding: []
-            };
+            // Throw error to let the frontend know something went wrong
+            throw new Error(`AI Service Failed: ${error.message}`);
         }
     }
 
     async generateAssessmentFeedback(data: any): Promise<{ strengths: string; weaknesses: string; improvementTips: string; communicationClarity?: number }> {
-        const prompt = `Analyze this candidate's assessment performance and provide constructive feedback.
-        
-        Job Title: ${data.jobTitle}
-        Coding Score: ${data.codingScore}%
-        Integrity Score: ${data.integrityScore}%
-        Tab Switches: ${data.tabSwitches}
-        Submissions: ${JSON.stringify(data.submissions)}
-
-        Provide feedback in JSON format with keys:
-        - strengths (string): What they did well
-        - weaknesses (string): Areas for improvement
-        - improvementTips (string): Actionable advice
-        - communicationClarity (number): Estimate 0-100 based on code readability (default 80 if unknown)
-        `;
+        const prompt = `Analyze performance for ${data.jobTitle}. Score: ${data.codingScore}.
+        Return JSON headers only: strengths, weaknesses, improvementTips, communicationClarity(0-100).`;
 
         try {
             const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
@@ -289,19 +183,61 @@ IMPORTANT: Ensure strict JSON format. Do not include markdown formatting like \`
             const result = await response.json();
             const text = result.candidates[0]?.content?.parts[0]?.text || '';
 
-            let jsonText = text;
-            const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-            if (jsonMatch) jsonText = jsonMatch[1];
-
-            return JSON.parse(jsonText);
+            return this.cleanAndParseJson(text);
         } catch (error) {
             this.logger.error('Failed to generate feedback', error);
             return {
-                strengths: 'Candidate demonstrated basic coding skills.',
-                weaknesses: 'Could improve on edge case handling.',
-                improvementTips: 'Practice more algorithmic problems.',
+                strengths: 'Good effort.',
+                weaknesses: 'Needs practice.',
+                improvementTips: 'Keep coding.',
                 communicationClarity: 80
             };
+        }
+    }
+
+    private async callGemini(prompt: string, retries = 3): Promise<any> {
+        const delays = [10000, 20000, 40000]; // Increased backoff: 10s, 20s, 40s
+
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                const response = await fetch(`${this.apiUrl}?key=${this.apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: "user", parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
+                    }),
+                });
+
+                if (response.status === 429) {
+                    if (attempt < retries) {
+                        const waitTime = delays[attempt] || 10000;
+                        this.logger.warn(`Gemini Rate Limit (429). Retrying in ${waitTime / 1000}s... (Attempt ${attempt + 1}/${retries})`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        continue;
+                    } else {
+                        throw new Error('Gemini API Rate Limit Exceeded after retries');
+                    }
+                }
+
+                if (!response.ok) throw new Error(`Gemini API error: ${response.statusText}`);
+
+                const data = await response.json();
+                const text = data.candidates[0]?.content?.parts[0]?.text;
+
+                // Clean markdown code blocks if present
+                const cleanText = text.replace(/```json\n|```/g, '');
+                return JSON.parse(cleanText);
+
+            } catch (error) {
+                if (attempt < retries && (error.message.includes('429') || error.message.includes('FetchError') || error.message.includes('overloaded'))) {
+                    const waitTime = delays[attempt] || 10000;
+                    this.logger.warn(`Gemini API Error: ${error.message}. Retrying in ${waitTime / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                    throw error;
+                }
+            }
         }
     }
 }

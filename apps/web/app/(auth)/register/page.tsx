@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { motion } from 'framer-motion';
+import { Suspense } from 'react';
 
 const studentSchema = z.object({
     email: z.string().email('Invalid email address'),
@@ -33,12 +34,14 @@ const companySchema = z.object({
 type StudentFormData = z.infer<typeof studentSchema>;
 type CompanyFormData = z.infer<typeof companySchema>;
 
-export default function RegisterPage() {
+function RegisterForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const roleParam = searchParams.get('role');
     const { toast } = useToast();
     const { setAuth } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('student');
+    const [activeTab, setActiveTab] = useState(roleParam === 'company' ? 'company' : 'student');
 
     const studentForm = useForm<StudentFormData>({
         resolver: zodResolver(studentSchema),
@@ -287,5 +290,13 @@ export default function RegisterPage() {
                 </Card>
             </motion.div>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <RegisterForm />
+        </Suspense>
     );
 }

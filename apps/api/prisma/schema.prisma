@@ -163,6 +163,7 @@ enum ApplicationStatus {
   REJECTED
   OFFER_SENT
   HIRED
+  TERMINATED
 }
 
 model Application {

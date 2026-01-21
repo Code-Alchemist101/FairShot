@@ -4,13 +4,14 @@ import { Editor } from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 
 interface CodeEditorProps {
-    code: string;
+    code?: string;
+    defaultValue?: string;
     onChange: (value: string | undefined) => void;
     language: string;
     readOnly?: boolean;
 }
 
-export function CodeEditor({ code, onChange, language, readOnly = false }: CodeEditorProps) {
+export function CodeEditor({ code, defaultValue, onChange, language, readOnly = false }: CodeEditorProps) {
     // Map language names to Monaco language IDs
     const getMonacoLanguage = (lang: string): string => {
         const languageMap: Record<string, string> = {
@@ -29,7 +30,8 @@ export function CodeEditor({ code, onChange, language, readOnly = false }: CodeE
             <Editor
                 height="100%"
                 language={getMonacoLanguage(language)}
-                value={code}
+                value={code} // Controlled if provided
+                defaultValue={defaultValue} // Uncontrolled if provided
                 onChange={onChange}
                 theme="vs-dark"
                 options={{

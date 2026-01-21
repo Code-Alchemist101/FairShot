@@ -50,10 +50,11 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
 
     const startCalibration = () => {
         setStep(0);
-        setMessage("Click each red dot 5 times while looking at it.");
+        setMessage("Focus on the pulsing dot and click it.");
     };
 
     const handlePointClick = async (index: number, e: React.MouseEvent) => {
+        e.preventDefault(); // Prevent text selection/double click behavior
         const { clientX, clientY } = e.nativeEvent;
         await calibratePoint(clientX, clientY);
 
@@ -103,7 +104,8 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center text-white">
+
+        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col items-center justify-center text-foreground select-none">
             {/* Gaze Dot */}
             <div
                 ref={dotRef}
@@ -113,36 +115,36 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
 
             {/* Pre-check Screen */}
             {step === -1 && (
-                <Card className="max-w-md w-full p-8 bg-zinc-950 border-zinc-800 space-y-6">
+                <Card className="max-w-md w-full p-8 bg-card border-border shadow-2xl space-y-6">
                     <div className="text-center space-y-2">
-                        <Target className="w-12 h-12 text-purple-500 mx-auto" />
-                        <h1 className="text-2xl font-bold text-white">Calibration Setup</h1>
-                        <p className="text-gray-400">Follow these steps for best results</p>
+                        <Target className="w-12 h-12 text-primary mx-auto" />
+                        <h1 className="text-2xl font-bold text-foreground">Calibration Setup</h1>
+                        <p className="text-muted-foreground">Follow these steps for best results</p>
                     </div>
 
                     {!isTracking ? (
                         <div className="flex flex-col items-center justify-center py-6 space-y-4">
-                            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                            <p className="text-sm text-gray-400 animate-pulse">Initializing Camera & AI Models...</p>
+                            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                            <p className="text-sm text-muted-foreground animate-pulse">Initializing Camera & AI Models...</p>
                         </div>
                     ) : (
                         <>
-                            <div className="space-y-4 text-sm text-gray-300">
+                            <div className="space-y-4 text-sm text-foreground/80">
                                 <div className="flex items-start gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-zinc-800 text-white flex items-center justify-center flex-shrink-0">1</div>
+                                    <div className="w-6 h-6 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 font-medium">1</div>
                                     <p>Sit comfortably about <strong>50cm (arm's length)</strong> from the screen.</p>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-zinc-800 text-white flex items-center justify-center flex-shrink-0">2</div>
+                                    <div className="w-6 h-6 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 font-medium">2</div>
                                     <p>Ensure your face is <strong>evenly lit</strong> (no bright windows behind you).</p>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-zinc-800 text-white flex items-center justify-center flex-shrink-0">3</div>
+                                    <div className="w-6 h-6 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center flex-shrink-0 font-medium">3</div>
                                     <p>Keep your head <strong>still</strong> and move only your eyes.</p>
                                 </div>
                             </div>
 
-                            <Button onClick={startCalibration} className="w-full bg-purple-600 hover:bg-purple-700">
+                            <Button onClick={startCalibration} className="w-full" size="lg">
                                 Start Calibration
                             </Button>
                         </>
@@ -152,9 +154,15 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
 
             {/* Instruction */}
             {step >= 0 && (
-                <div className="absolute top-10 text-center">
-                    <h1 className="text-3xl font-bold mb-2">Eye Tracking Calibration</h1>
-                    <p className="text-xl text-gray-300">{message}</p>
+                <div className="absolute top-10 text-center z-50 pointer-events-none">
+                    <h1 className="text-3xl font-bold mb-2 text-foreground drop-shadow-md">Eye Tracking Calibration</h1>
+                    <p className="text-xl text-muted-foreground font-medium bg-background/80 px-6 py-2 rounded-full backdrop-blur-md border shadow-sm animate-in fade-in slide-in-from-top-4">
+                        {step === 9 ? message : (
+                            <>
+                                Look at the <span className="text-red-500 font-bold">RED pulsating dot</span> and click it <span className="font-mono bg-muted px-2 rounded">{5 - clickCount}</span> more times.
+                            </>
+                        )}
+                    </p>
                 </div>
             )}
 
@@ -164,22 +172,33 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
                     <button
                         key={i}
                         disabled={i !== step}
+                        onMouseDown={(e) => e.preventDefault()} // Extra protection against selection
                         onClick={(e) => handlePointClick(i, e)}
-                        className={`absolute w-8 h-8 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${i === step
-                            ? 'bg-red-500 border-white scale-125 cursor-crosshair'
+                        className={`absolute w-12 h-12 rounded-full border-4 transition-all duration-300 flex items-center justify-center shadow-lg ${i === step
+                            ? 'bg-red-500 border-white scale-110 cursor-pointer z-40 animate-pulse ring-4 ring-red-500/30 hover:scale-125'
                             : i < step
-                                ? 'bg-green-500 border-green-500 opacity-50'
-                                : 'bg-gray-700 border-gray-700 opacity-30'
+                                ? 'bg-green-500 border-green-500 opacity-30 scale-75'
+                                : 'bg-muted border-muted-foreground opacity-10 scale-50'
                             }`}
                         style={{
                             left: `${p.x}%`,
                             top: `${p.y}%`,
                             transform: 'translate(-50%, -50%)',
-                            opacity: i === step ? 0.2 + (clickCount * 0.16) : undefined // Fade in as you click
                         }}
                     >
-                        {/* Show click progress */}
-                        {i === step && clickCount > 0 && <span className="text-xs font-bold text-white">{clickCount}</span>}
+                        {/* Show click progress ring */}
+                        {i === step && (
+                            <svg className="absolute w-full h-full -rotate-90 pointer-events-none opacity-50">
+                                <circle
+                                    r="18"
+                                    cx="20"
+                                    cy="20"
+                                />
+                            </svg>
+                        )}
+
+                        {/* Show click progress number */}
+                        {i === step && <span className="text-sm font-bold text-white drop-shadow-md">{5 - clickCount}</span>}
                     </button>
                 ))
             )}
@@ -191,28 +210,30 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
 
             {/* Result */}
             {accuracy !== null && (
-                <Card className="p-8 bg-zinc-900 border-zinc-800 text-center space-y-6">
+                <Card className="p-8 bg-card border-border shadow-2xl text-center space-y-6 max-w-md w-full">
                     <div className="flex justify-center">
                         {accuracy >= 60 ? (
-                            <CheckCircle className="w-16 h-16 text-green-500" />
+                            <CheckCircle className="w-20 h-20 text-green-500" />
                         ) : (
-                            <AlertTriangle className="w-16 h-16 text-yellow-500" />
+                            <AlertTriangle className="w-20 h-20 text-yellow-500" />
                         )}
                     </div>
 
                     <div>
-                        <h2 className="text-2xl font-bold mb-2">Accuracy: {accuracy}%</h2>
-                        <p className="text-zinc-400">
+                        <h2 className="text-3xl font-bold mb-2 text-foreground">Accuracy: {accuracy}%</h2>
+                        <p className="text-lg text-muted-foreground">
                             {accuracy >= 60
                                 ? "Great! Your eye tracking is calibrated."
                                 : "Calibration accuracy is too low. Please try again."}
                         </p>
                     </div>
 
-                    <div className="flex gap-4 justify-center">
+                    <div className="flex gap-4 justify-center w-full">
                         {accuracy < 60 && (
                             <Button
                                 variant="outline"
+                                size="lg"
+                                className="flex-1"
                                 onClick={() => { setStep(0); setClickCount(0); setAccuracy(null); setMessage("Click each red dot 5 times while looking at it."); }}
                             >
                                 Recalibrate
@@ -221,7 +242,8 @@ export function CalibrationOverlay({ onComplete, calibratePoint, gazeRef, isTrac
                         <Button
                             disabled={accuracy < 60}
                             onClick={onComplete}
-                            className="bg-purple-600 hover:bg-purple-700"
+                            size="lg"
+                            className="bg-primary hover:bg-primary/90 flex-1"
                         >
                             Start Assessment
                         </Button>

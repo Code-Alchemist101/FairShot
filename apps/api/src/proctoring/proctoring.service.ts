@@ -52,7 +52,7 @@ export class ProctoringService {
                 }),
                 this.prisma.application.update({
                     where: { id: session.applicationId },
-                    data: { status: 'REJECTED' }
+                    data: { status: 'TERMINATED' }
                 })
             ]);
             this.logger.warn(`Session ${sessionId} TERMINATED due to excessive tab switching.`);
